@@ -77,7 +77,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     highlight: true,
                     onTap: () => _open(const CatalogScreen()),
                     child: Row(children: [
-                      _AccentIcon(Icons.grid_view_rounded),
+                      const _AccentIcon(Icons.grid_view_rounded),
                       const SizedBox(width: 14),
                       const Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                         Text('کاتالوگ من', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
@@ -136,7 +136,7 @@ class _RefreshCard extends StatelessWidget {
   final DateTime updatedAt; final bool refreshing; final Future<void> Function() onRefresh;
   @override
   Widget build(BuildContext context) => GameonSurface(child: Row(children: [
-    SizedBox(width: 44, height: 44, child: refreshing ? const Padding(padding: EdgeInsets.all(10), child: CircularProgressIndicator(strokeWidth: 2)) : _AccentIcon(Icons.sync_rounded)),
+    SizedBox(width: 44, height: 44, child: refreshing ? const Padding(padding: EdgeInsets.all(10), child: CircularProgressIndicator(strokeWidth: 2)) : const _AccentIcon(Icons.sync_rounded)),
     const SizedBox(width: 12),
     Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       const Text('آخرین بروزرسانی', style: TextStyle(fontWeight: FontWeight.w900)),
@@ -174,7 +174,7 @@ class _Deals extends StatelessWidget {
               Text(g.title, textDirection: TextDirection.ltr, maxLines: 3, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w800)),
               const Spacer(),
               Row(children: [
-                if ((g.discountPercent ?? 0) > 0) Text('-${PersianDateTime.digits(g.discountPercent)}٪', style: const TextStyle(color: Color(0xFF56E06E), fontWeight: FontWeight.w900)),
+                if ((g.discountPercent ?? 0) > 0) Text('-${PersianDateTime.digits(g.discountPercent ?? 0)}٪', style: const TextStyle(color: Color(0xFF56E06E), fontWeight: FontWeight.w900)),
                 const Spacer(),
                 if (g.salePrice != null) Text(g.salePrice == 0 ? 'رایگان' : '\$${g.salePrice!.toStringAsFixed(2)}', textDirection: TextDirection.ltr, style: const TextStyle(fontWeight: FontWeight.w900)),
               ]),
