@@ -3,9 +3,11 @@ import 'package:flutter/material.dart';
 import 'package:gameon/src/data/models/game_summary.dart';
 import 'package:gameon/src/data/remote/cheapshark_api.dart';
 import 'package:gameon/src/data/remote/freetogame_api.dart';
+import 'package:gameon/src/data/remote/store_catalog_api.dart';
 import 'package:gameon/src/features/game/presentation/game_detail_screen.dart';
 import 'package:gameon/src/theme/gameon_theme.dart';
 import 'package:gameon/src/ui/gameon_ux.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class GameSearchScreen extends StatefulWidget {
   const GameSearchScreen({super.key});
@@ -17,6 +19,7 @@ class GameSearchScreen extends StatefulWidget {
 class _GameSearchScreenState extends State<GameSearchScreen> {
   final CheapSharkApi _cheapShark = CheapSharkApi();
   final FreeToGameApi _freeToGame = FreeToGameApi();
+  final StoreCatalogApi _storeCatalog = StoreCatalogApi();
   final TextEditingController _controller = TextEditingController();
   List<GameSummary> _results = const <GameSummary>[];
   bool _loading = false;
@@ -34,24 +37,48 @@ class _GameSearchScreenState extends State<GameSearchScreen> {
     });
 
     try {
-      final sources = await Future.wait<List<GameSummary>>([
-        _freeToGame.searchGames(query),
-        _cheapShark.searchGames(query),
-      ]);
+      final prefs = await SharedPreferences.getInstance();
+      final selected = prefs.getStringList('platforms') ?? const <String>[];
+      final consolePlatforms = selected
+          .where((p) => p == 'playstation' || p == 'xbox' || p == 'nintendo')
+          .toList();
+
+      final futures = <Future<List<GameSummary>>>[
+        _safe(() => _freeToGame.searchGames(query)),
+        _safe(() => _cheapShark.searchGames(query)),
+        ...consolePlatforms.map(
+          (platform) => _safe(() => _storeCatalog.searchPlatform(platform, query)),
+        ),
+      ];
+
+      final sources = await Future.wait(futures);
       final merged = <String, GameSummary>{};
-      for (final game in [...sources[0], ...sources[1]]) {
-        final key = game.title.trim().toLowerCase();
+      for (final game in sources.expand((items) => items)) {
+        final platform = (game.platform ?? '').toLowerCase();
+        final key = '${game.title.trim().toLowerCase()}|$platform';
         merged.putIfAbsent(key, () => game);
       }
-      final results = merged.values.toList();
+
+      final results = merged.values.toList()
+        ..sort((a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()));
       if (!mounted) return;
-      setState(() => _results = results);
+      setState(() => _results = results.take(160).toList());
       if (results.isNotEmpty) GameonHaptics.confirm();
     } catch (_) {
       if (!mounted) return;
       setState(() => _error = 'دریافت نتیجه از منابع واقعی ناموفق بود.');
     } finally {
       if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<List<GameSummary>> _safe(
+    Future<List<GameSummary>> Function() fetch,
+  ) async {
+    try {
+      return await fetch();
+    } catch (_) {
+      return const <GameSummary>[];
     }
   }
 
@@ -91,7 +118,13 @@ class _GameSearchScreenState extends State<GameSearchScreen> {
               padding: EdgeInsets.symmetric(horizontal: 18),
               child: Align(
                 alignment: Alignment.centerRight,
-                child: Text('منابع جستجو: FreeToGame + CheapShark', style: TextStyle(color: GameonColors.textSecondary, fontSize: 11.5)),
+                child: Text(
+                  'منابع: FreeToGame + CheapShark + کاتالوگ کنسول‌های انتخاب‌شده',
+                  style: TextStyle(
+                    color: GameonColors.textSecondary,
+                    fontSize: 11.5,
+                  ),
+                ),
               ),
             ),
             if (_loading)
@@ -99,11 +132,23 @@ class _GameSearchScreenState extends State<GameSearchScreen> {
                 padding: EdgeInsets.fromLTRB(16, 14, 16, 0),
                 child: Column(
                   children: [
-                    GameonSkeleton(width: double.infinity, height: 96, radius: 20),
+                    GameonSkeleton(
+                      width: double.infinity,
+                      height: 96,
+                      radius: 20,
+                    ),
                     SizedBox(height: 10),
-                    GameonSkeleton(width: double.infinity, height: 96, radius: 20),
+                    GameonSkeleton(
+                      width: double.infinity,
+                      height: 96,
+                      radius: 20,
+                    ),
                     SizedBox(height: 10),
-                    GameonSkeleton(width: double.infinity, height: 96, radius: 20),
+                    GameonSkeleton(
+                      width: double.infinity,
+                      height: 96,
+                      radius: 20,
+                    ),
                   ],
                 ),
               ),
@@ -124,11 +169,15 @@ class _GameSearchScreenState extends State<GameSearchScreen> {
                     ? Padding(
                         padding: const EdgeInsets.fromLTRB(20, 18, 20, 30),
                         child: GameonEmptyState(
-                          icon: _searched ? Icons.search_off_rounded : Icons.sports_esports_rounded,
-                          title: _searched ? 'چیزی پیدا نشد' : 'بازی موردنظرت را پیدا کن',
+                          icon: _searched
+                              ? Icons.search_off_rounded
+                              : Icons.sports_esports_rounded,
+                          title: _searched
+                              ? 'چیزی پیدا نشد'
+                              : 'بازی موردنظرت را پیدا کن',
                           message: _searched
                               ? 'برای این عبارت نتیجه‌ای از منابع واقعی پیدا نشد.'
-                              : 'جستجو هم بازی‌های رایگان و هم بازی‌های دارای قیمت را پوشش می‌دهد.',
+                              : 'جستجو PC و کنسول‌های انتخاب‌شده را هم‌زمان پوشش می‌دهد.',
                         ),
                       )
                     : ListView.separated(
@@ -138,10 +187,14 @@ class _GameSearchScreenState extends State<GameSearchScreen> {
                         itemBuilder: (_, index) {
                           final game = _results[index];
                           return GameonAnimatedIn(
-                            delay: Duration(milliseconds: 30 * index.clamp(0, 8)),
+                            delay: Duration(
+                              milliseconds: 30 * index.clamp(0, 8),
+                            ),
                             child: GameonSurface(
                               onTap: () => Navigator.of(context).push(
-                                MaterialPageRoute<void>(builder: (_) => GameDetailScreen(game: game)),
+                                MaterialPageRoute<void>(
+                                  builder: (_) => GameDetailScreen(game: game),
+                                ),
                               ),
                               padding: const EdgeInsets.all(12),
                               child: Row(
@@ -152,34 +205,71 @@ class _GameSearchScreenState extends State<GameSearchScreen> {
                                       width: 82,
                                       height: 66,
                                       child: game.thumbUrl == null
-                                          ? ColoredBox(color: Theme.of(context).colorScheme.surfaceContainerHighest)
+                                          ? ColoredBox(
+                                              color: Theme.of(context)
+                                                  .colorScheme
+                                                  .surfaceContainerHighest,
+                                            )
                                           : CachedNetworkImage(
                                               imageUrl: game.thumbUrl!,
                                               fit: BoxFit.cover,
-                                              placeholder: (_, __) => const GameonSkeleton(width: 82, height: 66, radius: 0),
-                                              errorWidget: (_, __, ___) => ColoredBox(color: Theme.of(context).colorScheme.surfaceContainerHighest),
+                                              placeholder: (_, __) =>
+                                                  const GameonSkeleton(
+                                                width: 82,
+                                                height: 66,
+                                                radius: 0,
+                                              ),
+                                              errorWidget: (_, __, ___) =>
+                                                  ColoredBox(
+                                                color: Theme.of(context)
+                                                    .colorScheme
+                                                    .surfaceContainerHighest,
+                                              ),
                                             ),
                                     ),
                                   ),
                                   const SizedBox(width: 14),
                                   Expanded(
                                     child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
                                       children: [
-                                        Text(game.title, textDirection: TextDirection.ltr, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w900)),
-                                        if (game.genre != null) ...[
+                                        Text(
+                                          game.title,
+                                          textDirection: TextDirection.ltr,
+                                          maxLines: 2,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.w900,
+                                          ),
+                                        ),
+                                        if (game.platform != null) ...[
                                           const SizedBox(height: 5),
-                                          Text(game.genre!, style: const TextStyle(color: GameonColors.textSecondary, fontSize: 11.5)),
+                                          Text(
+                                            game.platform!,
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: const TextStyle(
+                                              color: GameonColors.textSecondary,
+                                              fontSize: 11.5,
+                                            ),
+                                          ),
                                         ],
                                         const SizedBox(height: 5),
                                         Text(
-                                          game.source == 'freetogame' ? 'رایگان • FreeToGame' : 'قیمت و فروشگاه • CheapShark',
-                                          style: const TextStyle(color: GameonColors.textSecondary, fontSize: 11.5),
+                                          _sourceLabel(game),
+                                          style: const TextStyle(
+                                            color: GameonColors.textSecondary,
+                                            fontSize: 11.5,
+                                          ),
                                         ),
                                       ],
                                     ),
                                   ),
-                                  const Icon(Icons.chevron_left_rounded, color: GameonColors.textSecondary),
+                                  const Icon(
+                                    Icons.chevron_left_rounded,
+                                    color: GameonColors.textSecondary,
+                                  ),
                                 ],
                               ),
                             ),
@@ -192,4 +282,10 @@ class _GameSearchScreenState extends State<GameSearchScreen> {
       ),
     );
   }
+
+  String _sourceLabel(GameSummary game) => switch (game.source) {
+        'freetogame' => 'رایگان • FreeToGame',
+        'game-store-catalog' => 'فروشگاه کنسول • کاتالوگ واقعی',
+        _ => 'قیمت و فروشگاه • CheapShark',
+      };
 }
