@@ -79,7 +79,7 @@ class NewsRssApi {
       source: source.name,
       sourceType: source.type,
       summary: _cleanSummary(summaryRaw),
-      imageUrl: _extractImage(node, summaryRaw),
+      imageUrl: _extractImage(node),
       publishedAt: _parseDate(pubDate),
     );
   }
@@ -99,14 +99,14 @@ class NewsRssApi {
       source: source.name,
       sourceType: source.type,
       summary: _cleanSummary(summaryRaw),
-      imageUrl: _extractImage(node, summaryRaw),
+      imageUrl: _extractImage(node),
       publishedAt: _parseDate(dateRaw),
     );
   }
 
   String _text(XmlElement node, String name) => node.findElements(name).firstOrNull?.innerText.trim() ?? '';
 
-  String? _extractImage(XmlElement node, String html) {
+  String? _extractImage(XmlElement node) {
     for (final element in node.descendants.whereType<XmlElement>()) {
       final local = element.name.local.toLowerCase();
       if (local == 'content' || local == 'thumbnail' || local == 'enclosure') {
@@ -114,8 +114,7 @@ class NewsRssApi {
         if (url != null && url.startsWith('http')) return url;
       }
     }
-    final match = RegExp(r"<img[^>]+src=['\"]([^'\"]+)['\"]", caseSensitive: false).firstMatch(html);
-    return match?.group(1);
+    return null;
   }
 
   String? _cleanSummary(String value) {
