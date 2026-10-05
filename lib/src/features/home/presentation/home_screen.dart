@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:gameon/src/data/models/game_summary.dart';
 import 'package:gameon/src/data/remote/cheapshark_api.dart';
+import 'package:gameon/src/features/game/presentation/game_detail_screen.dart';
 import 'package:gameon/src/features/search/presentation/game_search_screen.dart';
 import 'package:gameon/src/theme/gameon_theme.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -114,29 +115,35 @@ class _Section extends StatelessWidget {
               separatorBuilder: (_, __) => const SizedBox(width: 10),
               itemBuilder: (_, i) {
                 final game = deals[i];
-                return Container(
-                  width: 170,
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: GameonColors.surface,
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: GameonColors.border),
+                return InkWell(
+                  borderRadius: BorderRadius.circular(20),
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(builder: (_) => GameDetailScreen(game: game)),
                   ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(game.title, textDirection: TextDirection.ltr, maxLines: 3, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w800)),
-                      const Spacer(),
-                      Row(
-                        children: [
-                          if ((game.discountPercent ?? 0) > 0)
-                            Text('-${game.discountPercent}%', style: const TextStyle(color: Color(0xFF56E06E), fontWeight: FontWeight.w900)),
-                          const Spacer(),
-                          if (game.salePrice != null)
-                            Text(game.salePrice == 0 ? 'رایگان' : '\$${game.salePrice!.toStringAsFixed(2)}', textDirection: TextDirection.ltr, style: const TextStyle(fontWeight: FontWeight.w900)),
-                        ],
-                      ),
-                    ],
+                  child: Container(
+                    width: 170,
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: GameonColors.surface,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: GameonColors.border),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(game.title, textDirection: TextDirection.ltr, maxLines: 3, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w800)),
+                        const Spacer(),
+                        Row(
+                          children: [
+                            if ((game.discountPercent ?? 0) > 0)
+                              Text('-${game.discountPercent}%', style: const TextStyle(color: Color(0xFF56E06E), fontWeight: FontWeight.w900)),
+                            const Spacer(),
+                            if (game.salePrice != null)
+                              Text(game.salePrice == 0 ? 'رایگان' : '\$${game.salePrice!.toStringAsFixed(2)}', textDirection: TextDirection.ltr, style: const TextStyle(fontWeight: FontWeight.w900)),
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
                 );
               },
