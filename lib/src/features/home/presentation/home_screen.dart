@@ -5,7 +5,7 @@ import 'package:gameon/src/data/models/game_summary.dart';
 import 'package:gameon/src/data/sync/data_sync_service.dart';
 import 'package:gameon/src/features/catalog/presentation/catalog_screen.dart';
 import 'package:gameon/src/features/game/presentation/game_detail_screen.dart';
-import 'package:gameon/src/features/news/presentation/news_screen.dart';
+import 'package:gameon/src/features/library/presentation/library_screen.dart';
 import 'package:gameon/src/features/search/presentation/game_search_screen.dart';
 import 'package:gameon/src/theme/gameon_theme.dart';
 import 'package:gameon/src/ui/gameon_ux.dart';
@@ -75,7 +75,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   GameonAnimatedIn(
                     child: _Header(
                       onCatalog: () => _open(const CatalogScreen()),
-                      onNews: () => _open(const NewsScreen()),
+                      onLibrary: () => _open(const LibraryScreen()),
                       onSearch: () => _open(const GameSearchScreen()),
                     ),
                   ),
@@ -104,7 +104,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   _QuickActions(
                     onCatalog: () => _open(const CatalogScreen()),
                     onSearch: () => _open(const GameSearchScreen()),
-                    onNews: () => _open(const NewsScreen()),
+                    onLibrary: () => _open(const LibraryScreen()),
                   ),
                   const SizedBox(height: 28),
                   if (!pcEnabled)
@@ -154,7 +154,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             children: [
                               Text('مشاهده کاتالوگ کامل', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
                               SizedBox(height: 4),
-                              Text('رایگان، پولی، تخفیف و سرویس‌ها', style: TextStyle(color: GameonColors.textSecondary, fontSize: 12.5)),
+                              Text('رایگان، پولی، تخفیف و جدیدترین‌ها', style: TextStyle(color: GameonColors.textSecondary, fontSize: 12.5)),
                             ],
                           ),
                         ),
@@ -164,7 +164,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                   const SizedBox(height: 18),
                   const Text(
-                    'منابع فعلی: FreeToGame و CheapShark. برای منابعی که نیاز به مجوز خصوصی دارند، هیچ داده ساختگی جایگزین نمی‌شود.',
+                    'منابع فعلی: FreeToGame و CheapShark. بخش‌های بدون منبع واقعی از مسیر اصلی حذف شده‌اند تا اپ ناقص به نظر نرسد.',
                     style: TextStyle(color: GameonColors.textSecondary, fontSize: 11.5, height: 1.6),
                   ),
                 ],
@@ -186,10 +186,10 @@ class _HomeScreenState extends State<HomeScreen> {
 }
 
 class _Header extends StatelessWidget {
-  const _Header({required this.onCatalog, required this.onNews, required this.onSearch});
+  const _Header({required this.onCatalog, required this.onLibrary, required this.onSearch});
 
   final VoidCallback onCatalog;
-  final VoidCallback onNews;
+  final VoidCallback onLibrary;
   final VoidCallback onSearch;
 
   @override
@@ -204,7 +204,7 @@ class _Header extends StatelessWidget {
         const Spacer(),
         IconButton.filledTonal(tooltip: 'کاتالوگ', onPressed: onCatalog, icon: const Icon(Icons.grid_view_rounded)),
         const SizedBox(width: 7),
-        IconButton.filledTonal(tooltip: 'اخبار', onPressed: onNews, icon: const Icon(Icons.newspaper_rounded)),
+        IconButton.filledTonal(tooltip: 'کتابخانه', onPressed: onLibrary, icon: const Icon(Icons.favorite_rounded)),
         const SizedBox(width: 7),
         IconButton.filledTonal(tooltip: 'جستجو', onPressed: onSearch, icon: const Icon(Icons.search_rounded)),
       ],
@@ -254,24 +254,25 @@ class _RefreshCard extends StatelessWidget {
 }
 
 class _QuickActions extends StatelessWidget {
-  const _QuickActions({required this.onCatalog, required this.onSearch, required this.onNews});
+  const _QuickActions({required this.onCatalog, required this.onSearch, required this.onLibrary});
 
   final VoidCallback onCatalog;
   final VoidCallback onSearch;
-  final VoidCallback onNews;
+  final VoidCallback onLibrary;
 
   @override
   Widget build(BuildContext context) {
     final items = <(IconData, String, VoidCallback)>[
       (Icons.grid_view_rounded, 'کاتالوگ', onCatalog),
       (Icons.search_rounded, 'جستجو', onSearch),
-      (Icons.newspaper_rounded, 'اخبار', onNews),
+      (Icons.favorite_rounded, 'کتابخانه', onLibrary),
     ];
     return Row(
-      children: items.map((item) {
+      children: items.asMap().entries.map((entry) {
+        final item = entry.value;
         return Expanded(
           child: Padding(
-            padding: EdgeInsets.only(left: item == items.last ? 0 : 8),
+            padding: EdgeInsets.only(left: entry.key == items.length - 1 ? 0 : 8),
             child: GameonSurface(
               onTap: item.$3,
               padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 10),
