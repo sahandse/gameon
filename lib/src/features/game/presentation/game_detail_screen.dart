@@ -1,8 +1,8 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:gameon/src/data/local/game_library_store.dart';
 import 'package:gameon/src/data/models/game_summary.dart';
 import 'package:gameon/src/theme/gameon_theme.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 class GameDetailScreen extends StatefulWidget {
   const GameDetailScreen({super.key, required this.game});
@@ -14,11 +14,9 @@ class GameDetailScreen extends StatefulWidget {
 }
 
 class _GameDetailScreenState extends State<GameDetailScreen> {
+  final GameLibraryStore _library = GameLibraryStore();
   bool _following = false;
   bool _wishlisted = false;
-
-  String get _followKey => 'follow_game_${widget.game.id}';
-  String get _wishlistKey => 'wishlist_game_${widget.game.id}';
 
   @override
   void initState() {
@@ -27,25 +25,24 @@ class _GameDetailScreenState extends State<GameDetailScreen> {
   }
 
   Future<void> _loadLocalState() async {
-    final prefs = await SharedPreferences.getInstance();
+    final followed = await _library.isFollowed(widget.game.id);
+    final wishlisted = await _library.isWishlisted(widget.game.id);
     if (!mounted) return;
     setState(() {
-      _following = prefs.getBool(_followKey) ?? false;
-      _wishlisted = prefs.getBool(_wishlistKey) ?? false;
+      _following = followed;
+      _wishlisted = wishlisted;
     });
   }
 
   Future<void> _toggleFollow() async {
-    final prefs = await SharedPreferences.getInstance();
     final value = !_following;
-    await prefs.setBool(_followKey, value);
+    await _library.setFollowed(widget.game, value);
     if (mounted) setState(() => _following = value);
   }
 
   Future<void> _toggleWishlist() async {
-    final prefs = await SharedPreferences.getInstance();
     final value = !_wishlisted;
-    await prefs.setBool(_wishlistKey, value);
+    await _library.setWishlisted(widget.game, value);
     if (mounted) setState(() => _wishlisted = value);
   }
 
@@ -158,12 +155,8 @@ class _GameDetailScreenState extends State<GameDetailScreen> {
 class _SectionTitle extends StatelessWidget {
   const _SectionTitle({required this.title});
   final String title;
-
   @override
-  Widget build(BuildContext context) => Text(
-        title,
-        style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
-      );
+  Widget build(BuildContext context) => Text(title, style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900));
 }
 
 class _Badge extends StatelessWidget {
@@ -171,90 +164,54 @@ class _Badge extends StatelessWidget {
   final String label;
   final IconData icon;
   final bool ltr;
-
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: GameonColors.surface,
-        borderRadius: BorderRadius.circular(100),
-        border: Border.all(color: GameonColors.border),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(color: GameonColors.surface, borderRadius: BorderRadius.circular(100), border: Border.all(color: GameonColors.border)),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
           Icon(icon, size: 16, color: GameonColors.accentCyan),
           const SizedBox(width: 6),
           Text(label, textDirection: ltr ? TextDirection.ltr : TextDirection.rtl, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 12.5)),
-        ],
-      ),
-    );
-  }
+        ]),
+      );
 }
 
 class _PriceCard extends StatelessWidget {
   const _PriceCard({required this.game});
   final GameSummary game;
-
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: GameonColors.surface,
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: GameonColors.border),
-      ),
-      child: Row(
-        children: [
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.all(18),
+        decoration: BoxDecoration(color: GameonColors.surface, borderRadius: BorderRadius.circular(22), border: Border.all(color: GameonColors.border)),
+        child: Row(children: [
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('قیمت فعلی', style: TextStyle(color: GameonColors.textSecondary, fontSize: 12.5)),
-                const SizedBox(height: 6),
-                Text(
-                  game.salePrice == null ? 'نامشخص' : game.salePrice == 0 ? 'رایگان' : '\$${game.salePrice!.toStringAsFixed(2)}',
-                  textDirection: TextDirection.ltr,
-                  style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900),
-                ),
-              ],
-            ),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              const Text('قیمت فعلی', style: TextStyle(color: GameonColors.textSecondary, fontSize: 12.5)),
+              const SizedBox(height: 6),
+              Text(
+                game.salePrice == null ? 'نامشخص' : game.salePrice == 0 ? 'رایگان' : '\$${game.salePrice!.toStringAsFixed(2)}',
+                textDirection: TextDirection.ltr,
+                style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900),
+              ),
+            ]),
           ),
           if (game.normalPrice != null && game.isDiscounted)
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                const Text('قیمت اصلی', style: TextStyle(color: GameonColors.textSecondary, fontSize: 12.5)),
-                const SizedBox(height: 6),
-                Text(
-                  '\$${game.normalPrice!.toStringAsFixed(2)}',
-                  textDirection: TextDirection.ltr,
-                  style: const TextStyle(decoration: TextDecoration.lineThrough, color: GameonColors.textSecondary),
-                ),
-              ],
-            ),
-        ],
-      ),
-    );
-  }
+            Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+              const Text('قیمت اصلی', style: TextStyle(color: GameonColors.textSecondary, fontSize: 12.5)),
+              const SizedBox(height: 6),
+              Text('\$${game.normalPrice!.toStringAsFixed(2)}', textDirection: TextDirection.ltr, style: const TextStyle(decoration: TextDecoration.lineThrough, color: GameonColors.textSecondary)),
+            ]),
+        ]),
+      );
 }
 
 class _InfoCard extends StatelessWidget {
   const _InfoCard({required this.text});
   final String text;
-
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: GameonColors.surface,
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: GameonColors.border),
-      ),
-      child: Text(text, style: const TextStyle(color: GameonColors.textSecondary, height: 1.7)),
-    );
-  }
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.all(18),
+        decoration: BoxDecoration(color: GameonColors.surface, borderRadius: BorderRadius.circular(22), border: Border.all(color: GameonColors.border)),
+        child: Text(text, style: const TextStyle(color: GameonColors.textSecondary, height: 1.7)),
+      );
 }
