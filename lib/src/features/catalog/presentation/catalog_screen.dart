@@ -4,6 +4,7 @@ import 'package:gameon/src/core/format/persian_datetime.dart';
 import 'package:gameon/src/data/models/game_summary.dart';
 import 'package:gameon/src/data/remote/cheapshark_api.dart';
 import 'package:gameon/src/data/remote/freetogame_api.dart';
+import 'package:gameon/src/data/remote/store_catalog_api.dart';
 import 'package:gameon/src/features/game/presentation/game_detail_screen.dart';
 import 'package:gameon/src/theme/gameon_theme.dart';
 import 'package:gameon/src/ui/gameon_ux.dart';
@@ -19,38 +20,78 @@ class CatalogScreen extends StatefulWidget {
 class _CatalogScreenState extends State<CatalogScreen> {
   final CheapSharkApi _cheapShark = CheapSharkApi();
   final FreeToGameApi _freeToGame = FreeToGameApi();
+  final StoreCatalogApi _storeCatalog = StoreCatalogApi();
+  final TextEditingController _search = TextEditingController();
+
   late Future<_CatalogData> _future = _load();
+  String? _activePlatform;
   int _segment = 0;
   String _category = 'همه';
 
-  static const _segments = <String>['رایگان', 'جدیدترین', 'پولی', 'تخفیف', 'اشتراکی'];
-  static const _categories = <String>['همه', 'اکشن', 'شوتر', 'MMO', 'استراتژی', 'ورزشی', 'ریسینگ'];
+  static const _pcSegments = <String>['رایگان', 'جدیدترین', 'پولی', 'تخفیف'];
+  static const _consoleSegments = <String>['همه', 'رایگان', 'پولی'];
+  static const _categories = <String>[
+    'همه',
+    'اکشن',
+    'شوتر',
+    'MMO',
+    'استراتژی',
+    'ورزشی',
+    'ریسینگ',
+  ];
 
-  Future<_CatalogData> _load() async {
+  @override
+  void dispose() {
+    _search.dispose();
+    super.dispose();
+  }
+
+  Future<_CatalogData> _load([String? requestedPlatform]) async {
     final prefs = await SharedPreferences.getInstance();
     final platforms = prefs.getStringList('platforms') ?? const <String>[];
-    final pcEnabled = platforms.contains('pc');
-    if (!pcEnabled) {
-      return _CatalogData(platforms: platforms, freeGames: const [], newGames: const [], deals: const []);
+    final platform = requestedPlatform ??
+        _activePlatform ??
+        (platforms.isNotEmpty ? platforms.first : 'pc');
+
+    if (platform == 'pc') {
+      final results = await Future.wait<dynamic>([
+        _freeToGame.fetchGames(sortBy: 'popularity'),
+        _freeToGame.fetchGames(sortBy: 'release-date'),
+        _cheapShark.fetchDeals(pageSize: 100),
+      ]);
+      return _CatalogData(
+        platforms: platforms,
+        platform: platform,
+        freeGames: results[0] as List<GameSummary>,
+        newGames: results[1] as List<GameSummary>,
+        deals: results[2] as List<GameSummary>,
+      );
     }
 
-    final results = await Future.wait<dynamic>([
-      _freeToGame.fetchGames(sortBy: 'popularity'),
-      _freeToGame.fetchGames(sortBy: 'release-date'),
-      _cheapShark.fetchDeals(pageSize: 60),
-    ]);
-
+    final snapshot = await _storeCatalog.fetchPlatform(platform);
     return _CatalogData(
       platforms: platforms,
-      freeGames: results[0] as List<GameSummary>,
-      newGames: results[1] as List<GameSummary>,
-      deals: results[2] as List<GameSummary>,
+      platform: platform,
+      consoleCatalog: snapshot,
     );
+  }
+
+  Future<void> _selectPlatform(String platform) async {
+    if (_activePlatform == platform) return;
+    GameonHaptics.tap();
+    setState(() {
+      _activePlatform = platform;
+      _segment = 0;
+      _category = 'همه';
+      _search.clear();
+      _future = _load(platform);
+    });
+    await _future;
   }
 
   Future<void> _refresh() async {
     GameonHaptics.tap();
-    setState(() => _future = _load());
+    setState(() => _future = _load(_activePlatform));
     await _future;
     if (mounted) GameonHaptics.confirm();
   }
@@ -80,38 +121,77 @@ class _CatalogScreenState extends State<CatalogScreen> {
             }
 
             final data = snapshot.data!;
-            if (!data.platforms.contains('pc')) {
-              return ListView(
-                padding: const EdgeInsets.all(20),
-                children: const [
-                  GameonEmptyState(
-                    icon: Icons.computer_rounded,
-                    title: 'کاتالوگ کامل فعلاً برای PC فعال است',
-                    message: 'منابع عمومی قابل‌اعتماد PC متصل شده‌اند. پلتفرم‌های دیگر بدون منبع رسمی پایدار با داده حدسی پر نمی‌شوند.',
-                  ),
-                ],
-              );
-            }
+            _activePlatform ??= data.platform;
+            final segments = data.platform == 'pc'
+                ? _pcSegments
+                : _consoleSegments;
+            final games = _filteredGames(data);
 
-            final games = _gamesForSegment(data);
-            final filtered = _applyCategory(games);
             return RefreshIndicator(
               onRefresh: _refresh,
               child: ListView(
-                padding: const EdgeInsets.fromLTRB(20, 12, 20, 34),
+                padding: const EdgeInsets.fromLTRB(18, 12, 18, 34),
                 children: [
-                  Text('بازی واقعی، نه دمو', style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900)),
+                  Text(
+                    'کاتالوگ کامل ${_platformLabel(data.platform)}',
+                    style: Theme.of(context)
+                        .textTheme
+                        .headlineSmall
+                        ?.copyWith(fontWeight: FontWeight.w900),
+                  ),
                   const SizedBox(height: 7),
-                  const Text('بازی‌های رایگان از FreeToGame و قیمت/تخفیف‌ها از CheapShark دریافت می‌شوند.', style: TextStyle(color: GameonColors.textSecondary, height: 1.55)),
-                  const SizedBox(height: 20),
+                  Text(
+                    _sourceDescription(data),
+                    style: const TextStyle(
+                      color: GameonColors.textSecondary,
+                      height: 1.55,
+                    ),
+                  ),
+                  if (data.consoleCatalog?.updatedAt != null) ...[
+                    const SizedBox(height: 7),
+                    Text(
+                      'آخرین بروزرسانی منبع: ${PersianDateTime.dateTime(data.consoleCatalog!.updatedAt!.toLocal())}',
+                      style: const TextStyle(
+                        color: GameonColors.textSecondary,
+                        fontSize: 11.5,
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 18),
+                  _PlatformSelector(
+                    platforms: data.platforms,
+                    selected: data.platform,
+                    onSelected: _selectPlatform,
+                  ),
+                  const SizedBox(height: 14),
+                  TextField(
+                    controller: _search,
+                    onChanged: (_) => setState(() {}),
+                    textInputAction: TextInputAction.search,
+                    decoration: InputDecoration(
+                      hintText: 'جستجو در کاتالوگ ${_platformLabel(data.platform)}…',
+                      prefixIcon: const Icon(Icons.search_rounded),
+                      suffixIcon: _search.text.isEmpty
+                          ? null
+                          : IconButton(
+                              tooltip: 'پاک کردن',
+                              onPressed: () {
+                                _search.clear();
+                                setState(() {});
+                              },
+                              icon: const Icon(Icons.close_rounded),
+                            ),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
                   SingleChildScrollView(
                     scrollDirection: Axis.horizontal,
                     child: Row(
-                      children: List.generate(_segments.length, (index) {
+                      children: List.generate(segments.length, (index) {
                         return Padding(
                           padding: const EdgeInsets.only(left: 8),
                           child: ChoiceChip(
-                            label: Text(_segments[index]),
+                            label: Text(segments[index]),
                             selected: _segment == index,
                             onSelected: (_) {
                               GameonHaptics.tap();
@@ -122,8 +202,8 @@ class _CatalogScreenState extends State<CatalogScreen> {
                       }),
                     ),
                   ),
-                  const SizedBox(height: 12),
-                  if (_segment == 0 || _segment == 1)
+                  if (data.platform == 'pc' && (_segment == 0 || _segment == 1)) ...[
+                    const SizedBox(height: 12),
                     SingleChildScrollView(
                       scrollDirection: Axis.horizontal,
                       child: Row(
@@ -133,32 +213,69 @@ class _CatalogScreenState extends State<CatalogScreen> {
                             child: FilterChip(
                               label: Text(category),
                               selected: _category == category,
-                              onSelected: (_) => setState(() => _category = category),
+                              onSelected: (_) {
+                                GameonHaptics.tap();
+                                setState(() => _category = category);
+                              },
                             ),
                           );
                         }).toList(),
                       ),
                     ),
-                  const SizedBox(height: 22),
-                  if (_segment == 4)
-                    const GameonEmptyState(
-                      icon: Icons.workspace_premium_rounded,
-                      title: 'سرویس‌های اشتراکی هنوز منبع پایدار ندارند',
-                      message: 'Game Pass و PlayStation Plus زمانی فعال می‌شوند که منبع رسمی قابل استفاده داخل اپ داشته باشند؛ فعلاً داده جعلی نمایش داده نمی‌شود.',
-                    )
-                  else if (filtered.isEmpty)
+                  ],
+                  const SizedBox(height: 20),
+                  Row(
+                    children: [
+                      Text(
+                        '${PersianDateTime.digits(games.length)} بازی',
+                        style: const TextStyle(fontWeight: FontWeight.w900),
+                      ),
+                      const Spacer(),
+                      if (data.consoleCatalog != null)
+                        Text(
+                          'کل منبع: ${PersianDateTime.digits(data.consoleCatalog!.total)}',
+                          style: const TextStyle(
+                            color: GameonColors.textSecondary,
+                            fontSize: 11.5,
+                          ),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  if (games.isEmpty)
                     const GameonEmptyState(
                       icon: Icons.search_off_rounded,
                       title: 'موردی پیدا نشد',
-                      message: 'فیلتر را تغییر بده یا بروزرسانی کن.',
+                      message: 'عبارت جستجو یا فیلتر را تغییر بده.',
                     )
                   else
-                    ...filtered.take(80).map((game) => Padding(
-                          padding: const EdgeInsets.only(bottom: 11),
-                          child: _GameTile(game: game, showPrice: _segment == 2 || _segment == 3),
-                        )),
+                    ...games.take(250).map(
+                          (game) => Padding(
+                            padding: const EdgeInsets.only(bottom: 10),
+                            child: _GameTile(game: game),
+                          ),
+                        ),
+                  if (games.length > 250) ...[
+                    const SizedBox(height: 8),
+                    GameonSurface(
+                      child: Text(
+                        'برای سبک نگه‌داشتن صفحه، ۲۵۰ نتیجه اول نمایش داده شده. با جستجو می‌توانی بین کل ${PersianDateTime.digits(games.length)} مورد نتیجه دقیق پیدا کنی.',
+                        style: const TextStyle(
+                          color: GameonColors.textSecondary,
+                          height: 1.6,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 14),
-                  const Text('منابع: FreeToGame و CheapShark', style: TextStyle(color: GameonColors.textSecondary, fontSize: 11.5)),
+                  Text(
+                    _sourceFooter(data),
+                    style: const TextStyle(
+                      color: GameonColors.textSecondary,
+                      fontSize: 11.5,
+                    ),
+                  ),
                 ],
               ),
             );
@@ -168,14 +285,40 @@ class _CatalogScreenState extends State<CatalogScreen> {
     );
   }
 
-  List<GameSummary> _gamesForSegment(_CatalogData data) {
-    return switch (_segment) {
-      0 => data.freeGames,
-      1 => data.newGames,
-      2 => data.deals.where((g) => (g.salePrice ?? g.normalPrice ?? 0) > 0).toList(),
-      3 => data.deals.where((g) => g.isDiscounted).toList(),
-      _ => const <GameSummary>[],
-    };
+  List<GameSummary> _filteredGames(_CatalogData data) {
+    List<GameSummary> games;
+    if (data.platform == 'pc') {
+      games = switch (_segment) {
+        0 => data.freeGames,
+        1 => data.newGames,
+        2 => data.deals
+            .where((g) => (g.salePrice ?? g.normalPrice ?? 0) > 0)
+            .toList(),
+        3 => data.deals.where((g) => g.isDiscounted).toList(),
+        _ => const <GameSummary>[],
+      };
+      games = _applyCategory(games);
+    } else {
+      final all = data.consoleCatalog?.games ?? const <GameSummary>[];
+      games = switch (_segment) {
+        1 => all.where((g) => g.isFree).toList(),
+        2 => all.where((g) => (g.salePrice ?? g.normalPrice ?? 0) > 0).toList(),
+        _ => all,
+      };
+    }
+
+    final query = _search.text.trim().toLowerCase();
+    if (query.isEmpty) return games;
+    return games.where((game) {
+      final haystack = [
+        game.title,
+        game.genre ?? '',
+        game.platform ?? '',
+        game.publisher ?? '',
+        game.developer ?? '',
+      ].join(' ').toLowerCase();
+      return haystack.contains(query);
+    }).toList();
   }
 
   List<GameSummary> _applyCategory(List<GameSummary> games) {
@@ -190,46 +333,122 @@ class _CatalogScreenState extends State<CatalogScreen> {
       _ => '',
     };
     if (needle.isEmpty) return games;
-    return games.where((g) {
-      final genre = (g.genre ?? '').toLowerCase();
-      return genre.contains(needle);
-    }).toList();
+    return games.where((g) => (g.genre ?? '').toLowerCase().contains(needle)).toList();
   }
+
+  String _sourceDescription(_CatalogData data) {
+    if (data.platform == 'pc') {
+      return 'بازی‌های رایگان از FreeToGame و قیمت/تخفیف‌ها از CheapShark دریافت می‌شوند.';
+    }
+    return 'نام، قیمت، کاور، لینک فروشگاه و پلتفرم از کاتالوگ واقعی فروشگاه‌ها دریافت می‌شود؛ این منبع کش‌شده است و تاریخ بروزرسانی آن شفاف نمایش داده می‌شود.';
+  }
+
+  String _sourceFooter(_CatalogData data) => data.platform == 'pc'
+      ? 'منابع: FreeToGame و CheapShark'
+      : 'منبع کاتالوگ: Ephellon/game-store-catalog (داده جمع‌آوری‌شده از فروشگاه رسمی)';
+
+  String _platformLabel(String value) => switch (value) {
+        'playstation' => 'پلی‌استیشن',
+        'xbox' => 'ایکس‌باکس',
+        'pc' => 'رایانه',
+        'nintendo' => 'نینتندو',
+        _ => value,
+      };
 }
 
 class _CatalogData {
-  const _CatalogData({required this.platforms, required this.freeGames, required this.newGames, required this.deals});
+  const _CatalogData({
+    required this.platforms,
+    required this.platform,
+    this.freeGames = const <GameSummary>[],
+    this.newGames = const <GameSummary>[],
+    this.deals = const <GameSummary>[],
+    this.consoleCatalog,
+  });
 
   final List<String> platforms;
+  final String platform;
   final List<GameSummary> freeGames;
   final List<GameSummary> newGames;
   final List<GameSummary> deals;
+  final StoreCatalogSnapshot? consoleCatalog;
+}
+
+class _PlatformSelector extends StatelessWidget {
+  const _PlatformSelector({
+    required this.platforms,
+    required this.selected,
+    required this.onSelected,
+  });
+
+  final List<String> platforms;
+  final String selected;
+  final Future<void> Function(String) onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final items = platforms.isEmpty
+        ? const <String>['pc']
+        : platforms;
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: items.map((platform) {
+          return Padding(
+            padding: const EdgeInsets.only(left: 8),
+            child: ChoiceChip(
+              label: Text(_label(platform)),
+              selected: selected == platform,
+              onSelected: (_) => onSelected(platform),
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+
+  String _label(String value) => switch (value) {
+        'playstation' => 'پلی‌استیشن',
+        'xbox' => 'ایکس‌باکس',
+        'pc' => 'رایانه',
+        'nintendo' => 'نینتندو',
+        _ => value,
+      };
 }
 
 class _GameTile extends StatelessWidget {
-  const _GameTile({required this.game, required this.showPrice});
+  const _GameTile({required this.game});
 
   final GameSummary game;
-  final bool showPrice;
 
   @override
   Widget build(BuildContext context) {
     return GameonSurface(
-      onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => GameDetailScreen(game: game))),
+      onTap: () => Navigator.of(context).push(
+        MaterialPageRoute<void>(builder: (_) => GameDetailScreen(game: game)),
+      ),
       child: Row(
         children: [
           ClipRRect(
             borderRadius: BorderRadius.circular(14),
             child: SizedBox(
               width: 82,
-              height: 62,
+              height: 68,
               child: game.thumbUrl == null
-                  ? ColoredBox(color: Theme.of(context).colorScheme.surfaceContainerHighest)
+                  ? ColoredBox(
+                      color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                    )
                   : CachedNetworkImage(
                       imageUrl: game.thumbUrl!,
                       fit: BoxFit.cover,
-                      placeholder: (_, __) => const GameonSkeleton(width: 82, height: 62, radius: 0),
-                      errorWidget: (_, __, ___) => ColoredBox(color: Theme.of(context).colorScheme.surfaceContainerHighest),
+                      placeholder: (_, __) => const GameonSkeleton(
+                        width: 82,
+                        height: 68,
+                        radius: 0,
+                      ),
+                      errorWidget: (_, __, ___) => ColoredBox(
+                        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                      ),
                     ),
             ),
           ),
@@ -238,22 +457,54 @@ class _GameTile extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(game.title, textDirection: TextDirection.ltr, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w900)),
+                Text(
+                  game.title,
+                  textDirection: TextDirection.ltr,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontWeight: FontWeight.w900),
+                ),
                 const SizedBox(height: 5),
-                if (game.genre != null)
-                  Text(game.genre!, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: GameonColors.textSecondary, fontSize: 11.5)),
+                if (game.platform != null)
+                  Text(
+                    game.platform!,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: GameonColors.textSecondary,
+                      fontSize: 11.5,
+                    ),
+                  ),
                 if (game.releaseDate != null) ...[
                   const SizedBox(height: 4),
-                  Text(PersianDateTime.date(game.releaseDate!), style: const TextStyle(color: GameonColors.textSecondary, fontSize: 11.5)),
+                  Text(
+                    PersianDateTime.date(game.releaseDate!),
+                    style: const TextStyle(
+                      color: GameonColors.textSecondary,
+                      fontSize: 11.5,
+                    ),
+                  ),
                 ],
-                if (showPrice && game.salePrice != null) ...[
+                if (game.salePrice != null) ...[
                   const SizedBox(height: 6),
                   Row(
                     children: [
-                      Text(game.salePrice == 0 ? 'رایگان' : '\$${game.salePrice!.toStringAsFixed(2)}', textDirection: TextDirection.ltr, style: const TextStyle(fontWeight: FontWeight.w900)),
+                      Text(
+                        game.salePrice == 0
+                            ? 'رایگان'
+                            : '\$${game.salePrice!.toStringAsFixed(2)}',
+                        textDirection: TextDirection.ltr,
+                        style: const TextStyle(fontWeight: FontWeight.w900),
+                      ),
                       if ((game.discountPercent ?? 0) > 0) ...[
                         const SizedBox(width: 8),
-                        Text('-${PersianDateTime.digits(game.discountPercent ?? 0)}٪', style: const TextStyle(color: Color(0xFF56E06E), fontWeight: FontWeight.w900)),
+                        Text(
+                          '-${PersianDateTime.digits(game.discountPercent ?? 0)}٪',
+                          style: const TextStyle(
+                            color: Color(0xFF56E06E),
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
                       ],
                     ],
                   ),
@@ -261,7 +512,11 @@ class _GameTile extends StatelessWidget {
               ],
             ),
           ),
-          const Icon(Icons.arrow_back_ios_new_rounded, size: 15, color: GameonColors.textSecondary),
+          const Icon(
+            Icons.arrow_back_ios_new_rounded,
+            size: 15,
+            color: GameonColors.textSecondary,
+          ),
         ],
       ),
     );
