@@ -31,6 +31,7 @@ class StoreCatalogApi {
 
   final Dio _dio;
   final Map<String, StoreCatalogSnapshot> _memoryCache = {};
+  final Map<String, List<GameSummary>> _searchCache = {};
 
   static const _folderByPlatform = <String, String>{
     'playstation': 'psn',
@@ -64,7 +65,74 @@ class StoreCatalogApi {
     final rows = responses[0].data is List
         ? responses[0].data as List<dynamic>
         : const <dynamic>[];
+    final games = _parseRows(platform, rows, updatedAt: updatedAt);
 
+    games.sort((a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()));
+    final snapshot = StoreCatalogSnapshot(
+      platform: platform,
+      games: games,
+      updatedAt: updatedAt,
+      total: (metadata['size'] as num?)?.toInt() ?? games.length,
+    );
+    _memoryCache[platform] = snapshot;
+    return snapshot;
+  }
+
+  Future<List<GameSummary>> searchPlatform(
+    String platform,
+    String query,
+  ) async {
+    final normalized = query.trim().toLowerCase();
+    if (normalized.isEmpty) return const <GameSummary>[];
+    final folder = _folderByPlatform[platform];
+    if (folder == null) return const <GameSummary>[];
+
+    final cachedFull = _memoryCache[platform];
+    if (cachedFull != null) {
+      return _filter(cachedFull.games, normalized);
+    }
+
+    final first = normalized.characters.first;
+    final letter = RegExp(r'^[a-z]$').hasMatch(first) ? first : '_';
+    final cacheKey = '$platform:$letter';
+    var candidates = _searchCache[cacheKey];
+
+    if (candidates == null) {
+      final responses = await Future.wait<Response<dynamic>>([
+        _dio.get<dynamic>('/$folder/$letter.json'),
+        _dio.get<dynamic>('/$folder/%24.json'),
+      ]);
+      final metadata = responses[1].data is Map<String, dynamic>
+          ? responses[1].data as Map<String, dynamic>
+          : const <String, dynamic>{};
+      final updatedAt = DateTime.tryParse((metadata['date'] ?? '').toString());
+      final rows = responses[0].data is List
+          ? responses[0].data as List<dynamic>
+          : const <dynamic>[];
+      candidates = _parseRows(platform, rows, updatedAt: updatedAt);
+      _searchCache[cacheKey] = candidates;
+    }
+
+    return _filter(candidates, normalized).take(80).toList();
+  }
+
+  List<GameSummary> _filter(List<GameSummary> games, String query) {
+    return games.where((game) {
+      final haystack = [
+        game.title,
+        game.platform ?? '',
+        game.publisher ?? '',
+        game.developer ?? '',
+      ].join(' ').toLowerCase();
+      return haystack.contains(query);
+    }).toList();
+  }
+
+  List<GameSummary> _parseRows(
+    String platform,
+    List<dynamic> rows, {
+    DateTime? updatedAt,
+  }) {
     final games = <GameSummary>[];
     for (final row in rows) {
       Map<String, dynamic>? json;
@@ -103,16 +171,7 @@ class StoreCatalogApi {
         sourceUpdatedAt: updatedAt,
       ));
     }
-
-    games.sort((a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()));
-    final snapshot = StoreCatalogSnapshot(
-      platform: platform,
-      games: games,
-      updatedAt: updatedAt,
-      total: (metadata['size'] as num?)?.toInt() ?? games.length,
-    );
-    _memoryCache[platform] = snapshot;
-    return snapshot;
+    return games;
   }
 
   double? _parsePrice(String? value) {
