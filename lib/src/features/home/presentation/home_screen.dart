@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:gameon/src/core/format/persian_datetime.dart';
 import 'package:gameon/src/data/models/game_summary.dart';
-import 'package:gameon/src/data/remote/cheapshark_api.dart';
+import 'package:gameon/src/data/sync/data_sync_service.dart';
 import 'package:gameon/src/features/catalog/presentation/catalog_screen.dart';
 import 'package:gameon/src/features/game/presentation/game_detail_screen.dart';
 import 'package:gameon/src/features/news/presentation/news_screen.dart';
 import 'package:gameon/src/features/search/presentation/game_search_screen.dart';
 import 'package:gameon/src/theme/gameon_theme.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -16,23 +16,28 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  final CheapSharkApi _api = CheapSharkApi();
-  late Future<_HomeData> _future = _load();
+  final DataSyncService _syncService = DataSyncService();
+  late Future<DataSyncSnapshot> _future = _syncService.refresh();
+  bool _refreshing = false;
 
-  Future<_HomeData> _load() async {
-    final prefs = await SharedPreferences.getInstance();
-    final platforms = prefs.getStringList('platforms') ?? const <String>[];
-    final deals = platforms.contains('pc')
-        ? await _api.fetchDeals(pageSize: 20)
-        : const <GameSummary>[];
-    return _HomeData(platforms, deals);
+  Future<void> _refresh() async {
+    if (_refreshing) return;
+    setState(() {
+      _refreshing = true;
+      _future = _syncService.refresh();
+    });
+    try {
+      await _future;
+    } finally {
+      if (mounted) setState(() => _refreshing = false);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: SafeArea(
-        child: FutureBuilder<_HomeData>(
+        child: FutureBuilder<DataSyncSnapshot>(
           future: _future,
           builder: (context, snapshot) {
             if (snapshot.connectionState != ConnectionState.done) {
@@ -40,15 +45,16 @@ class _HomeScreenState extends State<HomeScreen> {
             }
             if (snapshot.hasError) {
               return Center(
-                child: FilledButton.tonal(
-                  onPressed: () => setState(() => _future = _load()),
-                  child: const Text('تلاش دوباره'),
+                child: FilledButton.tonalIcon(
+                  onPressed: _refresh,
+                  icon: const Icon(Icons.refresh_rounded),
+                  label: const Text('تلاش دوباره'),
                 ),
               );
             }
             final data = snapshot.data!;
             return RefreshIndicator(
-              onRefresh: () async => setState(() => _future = _load()),
+              onRefresh: _refresh,
               child: ListView(
                 padding: const EdgeInsets.fromLTRB(20, 14, 20, 32),
                 children: [
@@ -75,7 +81,13 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 26),
+                  const SizedBox(height: 24),
+                  _RefreshCard(
+                    updatedAt: data.updatedAt,
+                    refreshing: _refreshing,
+                    onRefresh: _refresh,
+                  ),
+                  const SizedBox(height: 24),
                   Text('برای تو', style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w900)),
                   const SizedBox(height: 8),
                   Text(
@@ -116,7 +128,7 @@ class _HomeScreenState extends State<HomeScreen> {
                               children: [
                                 Text('کاتالوگ من', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
                                 SizedBox(height: 5),
-                                Text('رایگان، اشتراکی، پولی، تخفیف و بزودی', style: TextStyle(color: GameonColors.textSecondary, fontSize: 12.5)),
+                                Text('رایگان، اشتراکی، پولی، تخفیف و به‌زودی', style: TextStyle(color: GameonColors.textSecondary, fontSize: 12.5)),
                               ],
                             ),
                           ),
@@ -126,7 +138,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                   ),
                   const SizedBox(height: 28),
-                  _Section(title: 'تخفیف‌های واقعی PC', enabled: data.platforms.contains('pc'), deals: data.deals),
+                  _Section(title: 'تخفیف‌های واقعی رایانه', enabled: data.platforms.contains('pc'), deals: data.pcDeals),
                   const SizedBox(height: 28),
                   const _PendingSection(),
                 ],
@@ -139,10 +151,61 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
-class _HomeData {
-  const _HomeData(this.platforms, this.deals);
-  final List<String> platforms;
-  final List<GameSummary> deals;
+class _RefreshCard extends StatelessWidget {
+  const _RefreshCard({required this.updatedAt, required this.refreshing, required this.onRefresh});
+
+  final DateTime updatedAt;
+  final bool refreshing;
+  final Future<void> Function() onRefresh;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: GameonColors.surface,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: GameonColors.border),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.primary.withValues(alpha: .12),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: refreshing
+                ? const Padding(
+                    padding: EdgeInsets.all(11),
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : Icon(Icons.sync_rounded, color: Theme.of(context).colorScheme.primary),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('آخرین بروزرسانی', style: TextStyle(fontWeight: FontWeight.w900)),
+                const SizedBox(height: 4),
+                Text(
+                  PersianDateTime.dateTime(updatedAt),
+                  style: const TextStyle(color: GameonColors.textSecondary, fontSize: 12.5),
+                ),
+              ],
+            ),
+          ),
+          TextButton.icon(
+            onPressed: refreshing ? null : onRefresh,
+            icon: const Icon(Icons.refresh_rounded, size: 19),
+            label: const Text('بروزرسانی'),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _Section extends StatelessWidget {
@@ -158,10 +221,10 @@ class _Section extends StatelessWidget {
       children: [
         Text(title, style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900)),
         const SizedBox(height: 6),
-        Text(enabled ? 'داده زنده از CheapShark' : 'برای نمایش، PC را انتخاب کن', style: const TextStyle(color: GameonColors.textSecondary, fontSize: 12.5)),
+        Text(enabled ? 'داده زنده و واقعی' : 'برای نمایش، رایانه را انتخاب کن', style: const TextStyle(color: GameonColors.textSecondary, fontSize: 12.5)),
         const SizedBox(height: 12),
         if (!enabled)
-          const _Info(text: 'این بخش فقط برای کاربران PC فعال می‌شود.')
+          const _Info(text: 'این بخش فقط برای کاربران رایانه فعال می‌شود.')
         else if (deals.isEmpty)
           const _Info(text: 'در حال حاضر تخفیف قابل نمایش دریافت نشد.')
         else
@@ -194,7 +257,7 @@ class _Section extends StatelessWidget {
                         Row(
                           children: [
                             if ((game.discountPercent ?? 0) > 0)
-                              Text('-${game.discountPercent}%', style: const TextStyle(color: Color(0xFF56E06E), fontWeight: FontWeight.w900)),
+                              Text('-${PersianDateTime.digits(game.discountPercent)}٪', style: const TextStyle(color: Color(0xFF56E06E), fontWeight: FontWeight.w900)),
                             const Spacer(),
                             if (game.salePrice != null)
                               Text(game.salePrice == 0 ? 'رایگان' : '\$${game.salePrice!.toStringAsFixed(2)}', textDirection: TextDirection.ltr, style: const TextStyle(fontWeight: FontWeight.w900)),
@@ -218,7 +281,7 @@ class _PendingSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return const _Info(
-      text: 'PlayStation، Xbox و Nintendo تا اتصال منبع رسمی و قابل اتکا هیچ بازی، قیمت یا سرویس دمو نمایش نمی‌دهند.',
+      text: 'پلی‌استیشن، ایکس‌باکس و نینتندو تا اتصال منبع رسمی و قابل اتکا هیچ بازی، قیمت یا سرویس آزمایشی نمایش نمی‌دهند.',
     );
   }
 }
