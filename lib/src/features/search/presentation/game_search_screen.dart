@@ -2,6 +2,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:gameon/src/data/models/game_summary.dart';
 import 'package:gameon/src/data/remote/cheapshark_api.dart';
+import 'package:gameon/src/features/game/presentation/game_detail_screen.dart';
 import 'package:gameon/src/theme/gameon_theme.dart';
 
 class GameSearchScreen extends StatefulWidget {
@@ -90,38 +91,45 @@ class _GameSearchScreenState extends State<GameSearchScreen> {
                       separatorBuilder: (_, __) => const SizedBox(height: 10),
                       itemBuilder: (_, index) {
                         final game = _results[index];
-                        return Container(
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: GameonColors.surface,
-                            borderRadius: BorderRadius.circular(18),
-                            border: Border.all(color: GameonColors.border),
+                        return InkWell(
+                          borderRadius: BorderRadius.circular(18),
+                          onTap: () => Navigator.of(context).push(
+                            MaterialPageRoute<void>(builder: (_) => GameDetailScreen(game: game)),
                           ),
-                          child: Row(
-                            children: [
-                              ClipRRect(
-                                borderRadius: BorderRadius.circular(12),
-                                child: SizedBox(
-                                  width: 72,
-                                  height: 72,
-                                  child: game.thumbUrl == null
-                                      ? const ColoredBox(color: GameonColors.background)
-                                      : CachedNetworkImage(
-                                          imageUrl: game.thumbUrl!,
-                                          fit: BoxFit.cover,
-                                          errorWidget: (_, __, ___) => const ColoredBox(color: GameonColors.background),
-                                        ),
+                          child: Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: GameonColors.surface,
+                              borderRadius: BorderRadius.circular(18),
+                              border: Border.all(color: GameonColors.border),
+                            ),
+                            child: Row(
+                              children: [
+                                ClipRRect(
+                                  borderRadius: BorderRadius.circular(12),
+                                  child: SizedBox(
+                                    width: 72,
+                                    height: 72,
+                                    child: game.thumbUrl == null
+                                        ? const ColoredBox(color: GameonColors.background)
+                                        : CachedNetworkImage(
+                                            imageUrl: game.thumbUrl!,
+                                            fit: BoxFit.cover,
+                                            errorWidget: (_, __, ___) => const ColoredBox(color: GameonColors.background),
+                                          ),
+                                  ),
                                 ),
-                              ),
-                              const SizedBox(width: 14),
-                              Expanded(
-                                child: Text(
-                                  game.title,
-                                  textDirection: TextDirection.ltr,
-                                  style: const TextStyle(fontWeight: FontWeight.w800),
+                                const SizedBox(width: 14),
+                                Expanded(
+                                  child: Text(
+                                    game.title,
+                                    textDirection: TextDirection.ltr,
+                                    style: const TextStyle(fontWeight: FontWeight.w800),
+                                  ),
                                 ),
-                              ),
-                            ],
+                                const Icon(Icons.chevron_left_rounded, color: GameonColors.textSecondary),
+                              ],
+                            ),
                           ),
                         );
                       },
