@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:gameon/src/core/format/persian_datetime.dart';
 import 'package:gameon/src/data/local/game_library_store.dart';
 import 'package:gameon/src/data/models/game_summary.dart';
+import 'package:gameon/src/data/sync/data_sync_service.dart';
 import 'package:gameon/src/features/game/presentation/game_detail_screen.dart';
 import 'package:gameon/src/theme/gameon_theme.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -14,18 +16,33 @@ class FollowingCenterScreen extends StatefulWidget {
 
 class _FollowingCenterScreenState extends State<FollowingCenterScreen> {
   final GameLibraryStore _store = GameLibraryStore();
+  final DataSyncService _syncService = DataSyncService();
   late Future<_FollowingState> _future = _load();
+  bool _refreshing = false;
 
   Future<_FollowingState> _load() async {
     final games = await _store.followed();
     final prefs = await SharedPreferences.getInstance();
+    final lastUpdated = await _syncService.lastUpdated();
     return _FollowingState(
       games: games,
+      lastUpdated: lastUpdated,
       releaseAlerts: prefs.getBool('alert_release') ?? true,
       priceAlerts: prefs.getBool('alert_price') ?? true,
       serviceAlerts: prefs.getBool('alert_service') ?? true,
       updateAlerts: prefs.getBool('alert_update') ?? true,
     );
+  }
+
+  Future<void> _refresh() async {
+    if (_refreshing) return;
+    setState(() => _refreshing = true);
+    try {
+      await _syncService.refresh();
+      if (mounted) setState(() => _future = _load());
+    } finally {
+      if (mounted) setState(() => _refreshing = false);
+    }
   }
 
   Future<void> _setAlert(String key, bool value) async {
@@ -45,29 +62,36 @@ class _FollowingCenterScreenState extends State<FollowingCenterScreen> {
             return const Center(child: CircularProgressIndicator(strokeWidth: 2.4));
           }
           final state = snapshot.data ?? const _FollowingState(games: []);
-          return ListView(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
-            children: [
-              Text('مرکز دنبال‌کردن', style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900)),
-              const SizedBox(height: 8),
-              const Text('هشدارها فقط زمانی فعال می‌شوند که تغییر واقعی از منبع معتبر دریافت شود.', style: TextStyle(color: GameonColors.textSecondary, height: 1.6)),
-              const SizedBox(height: 22),
-              _AlertTile(title: 'انتشار بازی', value: state.releaseAlerts, onChanged: (v) => _setAlert('alert_release', v)),
-              _AlertTile(title: 'تغییر قیمت و تخفیف', value: state.priceAlerts, onChanged: (v) => _setAlert('alert_price', v)),
-              _AlertTile(title: 'ورود یا خروج از سرویس اشتراکی', value: state.serviceAlerts, onChanged: (v) => _setAlert('alert_service', v)),
-              _AlertTile(title: 'آپدیت مهم بازی', value: state.updateAlerts, onChanged: (v) => _setAlert('alert_update', v)),
-              const SizedBox(height: 26),
-              Text('بازی‌های دنبال‌شده', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900)),
-              const SizedBox(height: 12),
-              if (state.games.isEmpty)
-                const _InfoCard(text: 'هنوز بازی‌ای را دنبال نکردی.')
-              else
-                ...state.games.map((game) => _GameTile(game: game)),
-              const SizedBox(height: 26),
-              Text('تقویم انتشار', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900)),
-              const SizedBox(height: 12),
-              const _InfoCard(text: 'تقویم فقط تاریخ‌های انتشار تأییدشده را نمایش می‌دهد. تا اتصال منبع کامل انتشار، هیچ تاریخ دمو یا حدسی اضافه نمی‌شود.'),
-            ],
+          return RefreshIndicator(
+            onRefresh: _refresh,
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
+              children: [
+                Text('مرکز دنبال‌کردن', style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900)),
+                const SizedBox(height: 8),
+                const Text('هشدارها فقط زمانی فعال می‌شوند که تغییر واقعی از منبع معتبر دریافت شود.', style: TextStyle(color: GameonColors.textSecondary, height: 1.6)),
+                const SizedBox(height: 16),
+                _UpdateStatus(lastUpdated: state.lastUpdated, refreshing: _refreshing, onRefresh: _refresh),
+                const SizedBox(height: 22),
+                _AlertTile(title: 'انتشار بازی', value: state.releaseAlerts, onChanged: (v) => _setAlert('alert_release', v)),
+                _AlertTile(title: 'تغییر قیمت و تخفیف', value: state.priceAlerts, onChanged: (v) => _setAlert('alert_price', v)),
+                _AlertTile(title: 'ورود یا خروج از سرویس اشتراکی', value: state.serviceAlerts, onChanged: (v) => _setAlert('alert_service', v)),
+                _AlertTile(title: 'بروزرسانی مهم بازی', value: state.updateAlerts, onChanged: (v) => _setAlert('alert_update', v)),
+                const SizedBox(height: 26),
+                Text('بازی‌های دنبال‌شده', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900)),
+                const SizedBox(height: 12),
+                if (state.games.isEmpty)
+                  const _InfoCard(text: 'هنوز بازی‌ای را دنبال نکردی.')
+                else
+                  ...state.games.map((game) => _GameTile(game: game)),
+                const SizedBox(height: 26),
+                Text('تقویم انتشار', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900)),
+                const SizedBox(height: 12),
+                const _InfoCard(
+                  text: 'تقویم فقط تاریخ‌های انتشار تأییدشده را نمایش می‌دهد. همه تاریخ‌ها به‌صورت شمسی، با نام ماه فارسی و اعداد فارسی نمایش داده خواهند شد. تا اتصال منبع کامل انتشار، هیچ تاریخ آزمایشی یا حدسی اضافه نمی‌شود.',
+                ),
+              ],
+            ),
           );
         },
       ),
@@ -78,6 +102,7 @@ class _FollowingCenterScreenState extends State<FollowingCenterScreen> {
 class _FollowingState {
   const _FollowingState({
     required this.games,
+    this.lastUpdated,
     this.releaseAlerts = true,
     this.priceAlerts = true,
     this.serviceAlerts = true,
@@ -85,10 +110,51 @@ class _FollowingState {
   });
 
   final List<GameSummary> games;
+  final DateTime? lastUpdated;
   final bool releaseAlerts;
   final bool priceAlerts;
   final bool serviceAlerts;
   final bool updateAlerts;
+}
+
+class _UpdateStatus extends StatelessWidget {
+  const _UpdateStatus({required this.lastUpdated, required this.refreshing, required this.onRefresh});
+  final DateTime? lastUpdated;
+  final bool refreshing;
+  final Future<void> Function() onRefresh;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: GameonColors.surface,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: GameonColors.border),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.calendar_month_rounded, color: GameonColors.accentCyan),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              lastUpdated == null
+                  ? 'هنوز بروزرسانی موفق ثبت نشده است'
+                  : 'آخرین بروزرسانی: ${PersianDateTime.dateTime(lastUpdated!)}',
+              style: const TextStyle(color: GameonColors.textSecondary, fontSize: 12.5),
+            ),
+          ),
+          IconButton(
+            tooltip: 'بروزرسانی',
+            onPressed: refreshing ? null : onRefresh,
+            icon: refreshing
+                ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                : const Icon(Icons.refresh_rounded),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _AlertTile extends StatelessWidget {
