@@ -51,20 +51,38 @@ class GameLibraryStore {
   Map<String, dynamic> _toJson(GameSummary game) => <String, dynamic>{
         'id': game.id,
         'title': game.title,
+        'source': game.source,
+        'sourceId': game.sourceId,
+        'steamAppId': game.steamAppId,
         'thumbUrl': game.thumbUrl,
         'normalPrice': game.normalPrice,
         'salePrice': game.salePrice,
         'discountPercent': game.discountPercent,
         'storeId': game.storeId,
+        'shortDescription': game.shortDescription,
+        'genre': game.genre,
+        'platform': game.platform,
+        'publisher': game.publisher,
+        'developer': game.developer,
+        'releaseDate': game.releaseDate?.toIso8601String(),
       };
 
   GameSummary _fromJson(Map<String, dynamic> json) => GameSummary(
         id: json['id'] as String,
         title: json['title'] as String,
+        source: json['source'] as String?,
+        sourceId: json['sourceId'] as String?,
+        steamAppId: json['steamAppId'] as String?,
         thumbUrl: json['thumbUrl'] as String?,
         normalPrice: (json['normalPrice'] as num?)?.toDouble(),
         salePrice: (json['salePrice'] as num?)?.toDouble(),
         discountPercent: (json['discountPercent'] as num?)?.toInt(),
         storeId: json['storeId'] as String?,
+        shortDescription: json['shortDescription'] as String?,
+        genre: json['genre'] as String?,
+        platform: json['platform'] as String?,
+        publisher: json['publisher'] as String?,
+        developer: json['developer'] as String?,
+        releaseDate: DateTime.tryParse((json['releaseDate'] ?? '').toString()),
       );
 }
