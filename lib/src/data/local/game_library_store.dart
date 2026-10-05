@@ -59,12 +59,14 @@ class GameLibraryStore {
         'salePrice': game.salePrice,
         'discountPercent': game.discountPercent,
         'storeId': game.storeId,
+        'storeUrl': game.storeUrl,
         'shortDescription': game.shortDescription,
         'genre': game.genre,
         'platform': game.platform,
         'publisher': game.publisher,
         'developer': game.developer,
         'releaseDate': game.releaseDate?.toIso8601String(),
+        'sourceUpdatedAt': game.sourceUpdatedAt?.toIso8601String(),
       };
 
   GameSummary _fromJson(Map<String, dynamic> json) => GameSummary(
@@ -78,11 +80,14 @@ class GameLibraryStore {
         salePrice: (json['salePrice'] as num?)?.toDouble(),
         discountPercent: (json['discountPercent'] as num?)?.toInt(),
         storeId: json['storeId'] as String?,
+        storeUrl: json['storeUrl'] as String?,
         shortDescription: json['shortDescription'] as String?,
         genre: json['genre'] as String?,
         platform: json['platform'] as String?,
         publisher: json['publisher'] as String?,
         developer: json['developer'] as String?,
         releaseDate: DateTime.tryParse((json['releaseDate'] ?? '').toString()),
+        sourceUpdatedAt:
+            DateTime.tryParse((json['sourceUpdatedAt'] ?? '').toString()),
       );
 }
