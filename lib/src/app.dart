@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:gameon/src/features/home/presentation/home_screen.dart';
 import 'package:gameon/src/features/onboarding/presentation/onboarding_screen.dart';
+import 'package:gameon/src/features/shell/presentation/app_shell.dart';
 import 'package:gameon/src/theme/gameon_theme.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -33,7 +33,7 @@ class GameonApp extends StatelessWidget {
               return const _BootScreen();
             }
             return snapshot.data == true
-                ? const HomeScreen()
+                ? const AppShell()
                 : const OnboardingScreen();
           },
         ),
