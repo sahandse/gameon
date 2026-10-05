@@ -58,7 +58,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 child: GameonEmptyState(
                   icon: Icons.cloud_off_rounded,
                   title: 'بروزرسانی انجام نشد',
-                  message: 'اتصال به منابع واقعی بازی‌ها برقرار نشد. داده ساختگی نمایش داده نمی‌شود.',
+                  message: 'هنوز داده واقعی کش‌شده‌ای هم روی دستگاه وجود ندارد.',
                   actionLabel: 'تلاش دوباره',
                   onAction: _refresh,
                 ),
@@ -66,11 +66,10 @@ class _HomeScreenState extends State<HomeScreen> {
             }
 
             final data = snapshot.data!;
-            final pcEnabled = data.platforms.contains('pc');
             return RefreshIndicator(
               onRefresh: _refresh,
               child: ListView(
-                padding: const EdgeInsets.fromLTRB(20, 14, 20, 34),
+                padding: const EdgeInsets.fromLTRB(18, 14, 18, 34),
                 children: [
                   GameonAnimatedIn(
                     child: _Header(
@@ -85,18 +84,22 @@ class _HomeScreenState extends State<HomeScreen> {
                     child: _RefreshCard(
                       updatedAt: data.updatedAt,
                       refreshing: _refreshing,
+                      cached: data.usingCachedData,
                       onRefresh: _refresh,
                     ),
                   ),
                   const SizedBox(height: 24),
                   Text(
                     'برای تو',
-                    style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w900),
+                    style: Theme.of(context)
+                        .textTheme
+                        .headlineMedium
+                        ?.copyWith(fontWeight: FontWeight.w900),
                   ),
                   const SizedBox(height: 6),
                   Text(
                     data.platforms.isEmpty
-                        ? 'پلتفرمی انتخاب نشده است.'
+                        ? 'کشف بازی‌ها از همه منابع فعال'
                         : data.platforms.map(_platformLabel).join(' • '),
                     style: const TextStyle(color: GameonColors.textSecondary),
                   ),
@@ -107,32 +110,24 @@ class _HomeScreenState extends State<HomeScreen> {
                     onNews: () => _open(const NewsScreen()),
                   ),
                   const SizedBox(height: 28),
-                  if (!pcEnabled)
-                    const GameonEmptyState(
-                      icon: Icons.computer_rounded,
-                      title: 'برای محتوای زنده PC، رایانه را هم انتخاب کن',
-                      message: 'از بخش «من» می‌توانی هر زمان خواستی پلتفرم دیگری اضافه کنی.',
-                    )
-                  else ...[
-                    _HorizontalGames(
-                      title: 'محبوب‌ترین بازی‌های رایگان',
-                      subtitle: 'داده واقعی از FreeToGame',
-                      games: data.popularFreeGames,
-                    ),
-                    const SizedBox(height: 30),
-                    _HorizontalGames(
-                      title: 'جدیدترین بازی‌های رایگان',
-                      subtitle: 'مرتب‌شده بر اساس تاریخ انتشار',
-                      games: data.newFreeGames,
-                    ),
-                    const SizedBox(height: 30),
-                    _HorizontalGames(
-                      title: 'تخفیف‌های واقعی PC',
-                      subtitle: 'قیمت‌های زنده از فروشگاه‌های مختلف',
-                      games: data.pcDeals,
-                      showPrice: true,
-                    ),
-                  ],
+                  _HorizontalGames(
+                    title: 'محبوب‌ترین بازی‌های رایگان',
+                    subtitle: 'همیشه فعال • داده واقعی FreeToGame',
+                    games: data.popularFreeGames,
+                  ),
+                  const SizedBox(height: 30),
+                  _HorizontalGames(
+                    title: 'جدیدترین بازی‌های رایگان',
+                    subtitle: 'مرتب‌شده بر اساس تاریخ انتشار واقعی',
+                    games: data.newFreeGames,
+                  ),
+                  const SizedBox(height: 30),
+                  _HorizontalGames(
+                    title: 'تخفیف‌های زنده PC',
+                    subtitle: 'حتی اگر PC انتخاب نشده باشد برای کشف پیشنهادها نمایش داده می‌شود',
+                    games: data.pcDeals,
+                    showPrice: true,
+                  ),
                   const SizedBox(height: 30),
                   GameonSurface(
                     highlight: true,
@@ -143,19 +138,37 @@ class _HomeScreenState extends State<HomeScreen> {
                           width: 50,
                           height: 50,
                           decoration: BoxDecoration(
-                            color: Theme.of(context).colorScheme.primary.withValues(alpha: .12),
+                            color: Theme.of(context)
+                                .colorScheme
+                                .primary
+                                .withValues(alpha: .12),
                             borderRadius: BorderRadius.circular(16),
                           ),
-                          child: Icon(Icons.newspaper_rounded, color: Theme.of(context).colorScheme.primary),
+                          child: Icon(
+                            Icons.newspaper_rounded,
+                            color: Theme.of(context).colorScheme.primary,
+                          ),
                         ),
                         const SizedBox(width: 14),
                         const Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text('اخبار بازی', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
+                              Text(
+                                'اخبار زنده بازی',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w900,
+                                  fontSize: 16,
+                                ),
+                              ),
                               SizedBox(height: 4),
-                              Text('ویجیاتو، دنیای بازی، PlayStation Blog و Xbox Wire', style: TextStyle(color: GameonColors.textSecondary, fontSize: 12.5)),
+                              Text(
+                                'ویجیاتو، دنیای بازی، PlayStation Blog و Xbox Wire',
+                                style: TextStyle(
+                                  color: GameonColors.textSecondary,
+                                  fontSize: 12.5,
+                                ),
+                              ),
                             ],
                           ),
                         ),
@@ -165,8 +178,12 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                   const SizedBox(height: 18),
                   const Text(
-                    'داده‌های بازی از FreeToGame و CheapShark و خبرها از فیدهای واقعی رسانه‌ها دریافت می‌شوند.',
-                    style: TextStyle(color: GameonColors.textSecondary, fontSize: 11.5, height: 1.6),
+                    'انتخاب کنسول فقط محتوا را شخصی‌سازی می‌کند؛ صفحه اصلی برای هیچ پلتفرمی خالی نمی‌شود.',
+                    style: TextStyle(
+                      color: GameonColors.textSecondary,
+                      fontSize: 11.5,
+                      height: 1.6,
+                    ),
                   ),
                 ],
               ),
@@ -187,7 +204,11 @@ class _HomeScreenState extends State<HomeScreen> {
 }
 
 class _Header extends StatelessWidget {
-  const _Header({required this.onCatalog, required this.onNews, required this.onSearch});
+  const _Header({
+    required this.onCatalog,
+    required this.onNews,
+    required this.onSearch,
+  });
 
   final VoidCallback onCatalog;
   final VoidCallback onNews;
@@ -200,24 +221,45 @@ class _Header extends StatelessWidget {
         Text(
           'GAMEON',
           textDirection: TextDirection.ltr,
-          style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900, letterSpacing: 1.4),
+          style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                fontWeight: FontWeight.w900,
+                letterSpacing: 1.4,
+              ),
         ),
         const Spacer(),
-        IconButton.filledTonal(tooltip: 'کاتالوگ', onPressed: onCatalog, icon: const Icon(Icons.grid_view_rounded)),
+        IconButton.filledTonal(
+          tooltip: 'کاتالوگ',
+          onPressed: onCatalog,
+          icon: const Icon(Icons.grid_view_rounded),
+        ),
         const SizedBox(width: 7),
-        IconButton.filledTonal(tooltip: 'اخبار', onPressed: onNews, icon: const Icon(Icons.newspaper_rounded)),
+        IconButton.filledTonal(
+          tooltip: 'اخبار',
+          onPressed: onNews,
+          icon: const Icon(Icons.newspaper_rounded),
+        ),
         const SizedBox(width: 7),
-        IconButton.filledTonal(tooltip: 'جستجو', onPressed: onSearch, icon: const Icon(Icons.search_rounded)),
+        IconButton.filledTonal(
+          tooltip: 'جستجو',
+          onPressed: onSearch,
+          icon: const Icon(Icons.search_rounded),
+        ),
       ],
     );
   }
 }
 
 class _RefreshCard extends StatelessWidget {
-  const _RefreshCard({required this.updatedAt, required this.refreshing, required this.onRefresh});
+  const _RefreshCard({
+    required this.updatedAt,
+    required this.refreshing,
+    required this.cached,
+    required this.onRefresh,
+  });
 
   final DateTime updatedAt;
   final bool refreshing;
+  final bool cached;
   final Future<void> Function() onRefresh;
 
   @override
@@ -229,17 +271,32 @@ class _RefreshCard extends StatelessWidget {
             width: 42,
             height: 42,
             child: refreshing
-                ? const Padding(padding: EdgeInsets.all(10), child: CircularProgressIndicator(strokeWidth: 2))
-                : Icon(Icons.sync_rounded, color: Theme.of(context).colorScheme.primary),
+                ? const Padding(
+                    padding: EdgeInsets.all(10),
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : Icon(
+                    cached ? Icons.inventory_2_outlined : Icons.sync_rounded,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
           ),
           const SizedBox(width: 10),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('آخرین بروزرسانی', style: TextStyle(fontWeight: FontWeight.w900)),
+                Text(
+                  cached ? 'آخرین داده واقعی ذخیره‌شده' : 'آخرین بروزرسانی زنده',
+                  style: const TextStyle(fontWeight: FontWeight.w900),
+                ),
                 const SizedBox(height: 3),
-                Text(PersianDateTime.dateTime(updatedAt), style: const TextStyle(color: GameonColors.textSecondary, fontSize: 12)),
+                Text(
+                  PersianDateTime.dateTime(updatedAt),
+                  style: const TextStyle(
+                    color: GameonColors.textSecondary,
+                    fontSize: 12,
+                  ),
+                ),
               ],
             ),
           ),
@@ -255,7 +312,11 @@ class _RefreshCard extends StatelessWidget {
 }
 
 class _QuickActions extends StatelessWidget {
-  const _QuickActions({required this.onCatalog, required this.onSearch, required this.onNews});
+  const _QuickActions({
+    required this.onCatalog,
+    required this.onSearch,
+    required this.onNews,
+  });
 
   final VoidCallback onCatalog;
   final VoidCallback onSearch;
@@ -273,15 +334,26 @@ class _QuickActions extends StatelessWidget {
         final item = entry.value;
         return Expanded(
           child: Padding(
-            padding: EdgeInsets.only(left: entry.key == items.length - 1 ? 0 : 8),
+            padding: EdgeInsets.only(
+              left: entry.key == items.length - 1 ? 0 : 8,
+            ),
             child: GameonSurface(
               onTap: item.$3,
-              padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 10),
+              padding: const EdgeInsets.symmetric(
+                vertical: 14,
+                horizontal: 10,
+              ),
               child: Column(
                 children: [
                   Icon(item.$1, color: Theme.of(context).colorScheme.primary),
                   const SizedBox(height: 7),
-                  Text(item.$2, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 12.5)),
+                  Text(
+                    item.$2,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w800,
+                      fontSize: 12.5,
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -310,15 +382,27 @@ class _HorizontalGames extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(title, style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900)),
+        Text(
+          title,
+          style: Theme.of(context)
+              .textTheme
+              .titleLarge
+              ?.copyWith(fontWeight: FontWeight.w900),
+        ),
         const SizedBox(height: 5),
-        Text(subtitle, style: const TextStyle(color: GameonColors.textSecondary, fontSize: 12.5)),
+        Text(
+          subtitle,
+          style: const TextStyle(
+            color: GameonColors.textSecondary,
+            fontSize: 12.5,
+          ),
+        ),
         const SizedBox(height: 12),
         if (games.isEmpty)
           const GameonEmptyState(
-            icon: Icons.hourglass_empty_rounded,
-            title: 'موردی دریافت نشد',
-            message: 'منبع واقعی در این بروزرسانی داده‌ای برنگرداند.',
+            icon: Icons.cloud_download_outlined,
+            title: 'هنوز داده‌ای ذخیره نشده',
+            message: 'با اولین اتصال موفق این بخش پر و برای دفعات بعد کش می‌شود.',
           )
         else
           SizedBox(
@@ -327,7 +411,10 @@ class _HorizontalGames extends StatelessWidget {
               scrollDirection: Axis.horizontal,
               itemCount: games.take(12).length,
               separatorBuilder: (_, __) => const SizedBox(width: 11),
-              itemBuilder: (context, index) => _GameCard(game: games[index], showPrice: showPrice),
+              itemBuilder: (context, index) => _GameCard(
+                game: games[index],
+                showPrice: showPrice,
+              ),
             ),
           ),
       ],
@@ -359,12 +446,24 @@ class _GameCard extends StatelessWidget {
                 height: 108,
                 width: double.infinity,
                 child: game.thumbUrl == null
-                    ? ColoredBox(color: Theme.of(context).colorScheme.surfaceContainerHighest)
+                    ? ColoredBox(
+                        color: Theme.of(context)
+                            .colorScheme
+                            .surfaceContainerHighest,
+                      )
                     : CachedNetworkImage(
                         imageUrl: game.thumbUrl!,
                         fit: BoxFit.cover,
-                        placeholder: (_, __) => const GameonSkeleton(width: double.infinity, height: 108, radius: 0),
-                        errorWidget: (_, __, ___) => ColoredBox(color: Theme.of(context).colorScheme.surfaceContainerHighest),
+                        placeholder: (_, __) => const GameonSkeleton(
+                          width: double.infinity,
+                          height: 108,
+                          radius: 0,
+                        ),
+                        errorWidget: (_, __, ___) => ColoredBox(
+                          color: Theme.of(context)
+                              .colorScheme
+                              .surfaceContainerHighest,
+                        ),
                       ),
               ),
               Expanded(
@@ -378,23 +477,46 @@ class _GameCard extends StatelessWidget {
                         textDirection: TextDirection.ltr,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 13.5),
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w900,
+                          fontSize: 13.5,
+                        ),
                       ),
                       const Spacer(),
                       if (game.genre != null)
-                        Text(game.genre!, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: GameonColors.textSecondary, fontSize: 11.5)),
+                        Text(
+                          game.genre!,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: GameonColors.textSecondary,
+                            fontSize: 11.5,
+                          ),
+                        ),
                       if (showPrice && game.salePrice != null) ...[
                         const SizedBox(height: 5),
                         Row(
                           children: [
                             Text(
-                              game.salePrice == 0 ? 'رایگان' : '\$${game.salePrice!.toStringAsFixed(2)}',
+                              game.salePrice == 0
+                                  ? 'رایگان'
+                                  : '\$${game.salePrice!.toStringAsFixed(2)}',
                               textDirection: TextDirection.ltr,
-                              style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 12.5),
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w900,
+                                fontSize: 12.5,
+                              ),
                             ),
                             const Spacer(),
                             if ((game.discountPercent ?? 0) > 0)
-                              Text('-${PersianDateTime.digits(game.discountPercent ?? 0)}٪', style: const TextStyle(color: Color(0xFF56E06E), fontWeight: FontWeight.w900, fontSize: 11.5)),
+                              Text(
+                                '-${PersianDateTime.digits(game.discountPercent ?? 0)}٪',
+                                style: const TextStyle(
+                                  color: Color(0xFF56E06E),
+                                  fontWeight: FontWeight.w900,
+                                  fontSize: 11.5,
+                                ),
+                              ),
                           ],
                         ),
                       ],
