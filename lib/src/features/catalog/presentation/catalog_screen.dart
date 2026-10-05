@@ -3,6 +3,7 @@ import 'package:gameon/src/data/models/game_summary.dart';
 import 'package:gameon/src/data/remote/cheapshark_api.dart';
 import 'package:gameon/src/features/game/presentation/game_detail_screen.dart';
 import 'package:gameon/src/theme/gameon_theme.dart';
+import 'package:gameon/src/ui/gameon_ux.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class CatalogScreen extends StatefulWidget {
@@ -18,13 +19,7 @@ class _CatalogScreenState extends State<CatalogScreen> {
   String? _activePlatform;
   int _segment = 0;
 
-  static const _segments = <String>[
-    'رایگان',
-    'اشتراکی',
-    'پولی',
-    'تخفیف',
-    'بزودی',
-  ];
+  static const _segments = <String>['رایگان', 'اشتراکی', 'پولی', 'تخفیف', 'به‌زودی'];
 
   Future<_CatalogData> _load() async {
     final prefs = await SharedPreferences.getInstance();
@@ -33,6 +28,12 @@ class _CatalogScreenState extends State<CatalogScreen> {
         ? await _api.fetchDeals(pageSize: 40)
         : const <GameSummary>[];
     return _CatalogData(platforms: platforms, pcDeals: pcDeals);
+  }
+
+  Future<void> _refresh() async {
+    GameonHaptics.tap();
+    setState(() => _future = _load());
+    await _future;
   }
 
   @override
@@ -44,13 +45,17 @@ class _CatalogScreenState extends State<CatalogScreen> {
           future: _future,
           builder: (context, snapshot) {
             if (snapshot.connectionState != ConnectionState.done) {
-              return const Center(child: CircularProgressIndicator(strokeWidth: 2.4));
+              return const GameonPageSkeleton();
             }
             if (snapshot.hasError) {
-              return Center(
-                child: FilledButton.tonal(
-                  onPressed: () => setState(() => _future = _load()),
-                  child: const Text('تلاش دوباره'),
+              return Padding(
+                padding: const EdgeInsets.all(20),
+                child: GameonEmptyState(
+                  icon: Icons.cloud_off_rounded,
+                  title: 'کاتالوگ بروزرسانی نشد',
+                  message: 'دریافت داده واقعی ناموفق بود.',
+                  actionLabel: 'تلاش دوباره',
+                  onAction: _refresh,
                 ),
               );
             }
@@ -65,22 +70,27 @@ class _CatalogScreenState extends State<CatalogScreen> {
             };
 
             return RefreshIndicator(
-              onRefresh: () async => setState(() => _future = _load()),
+              onRefresh: _refresh,
               child: ListView(
                 padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
                 children: [
-                  Text(
-                    'همه چیز براساس پلتفرم تو',
-                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900),
-                  ),
-                  const SizedBox(height: 8),
-                  const Text(
-                    'Gameon فقط داده‌ای را نشان می‌دهد که از منبع واقعی دریافت شده باشد.',
-                    style: TextStyle(color: GameonColors.textSecondary, height: 1.6),
+                  GameonAnimatedIn(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('همه‌چیز براساس پلتفرم تو', style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900)),
+                        const SizedBox(height: 8),
+                        const Text('فقط داده واقعی نمایش داده می‌شود؛ بخش‌های بدون منبع معتبر با وضعیت شفاف مشخص هستند.', style: TextStyle(color: GameonColors.textSecondary, height: 1.6)),
+                      ],
+                    ),
                   ),
                   const SizedBox(height: 20),
                   if (data.platforms.isEmpty)
-                    const _SourceState(text: 'در تنظیمات هنوز پلتفرمی انتخاب نشده است.')
+                    const GameonEmptyState(
+                      icon: Icons.devices_other_rounded,
+                      title: 'پلتفرمی انتخاب نشده',
+                      message: 'برای ساخت کاتالوگ شخصی، ابتدا یک پلتفرم انتخاب کن.',
+                    )
                   else
                     SingleChildScrollView(
                       scrollDirection: Axis.horizontal,
@@ -92,7 +102,10 @@ class _CatalogScreenState extends State<CatalogScreen> {
                             child: ChoiceChip(
                               label: Text(_platformLabel(platform)),
                               selected: isSelected,
-                              onSelected: (_) => setState(() => _activePlatform = platform),
+                              onSelected: (_) {
+                                GameonHaptics.tap();
+                                setState(() => _activePlatform = platform);
+                              },
                             ),
                           );
                         }).toList(),
@@ -108,14 +121,20 @@ class _CatalogScreenState extends State<CatalogScreen> {
                           child: FilterChip(
                             label: Text(_segments[index]),
                             selected: _segment == index,
-                            onSelected: (_) => setState(() => _segment = index),
+                            onSelected: (_) {
+                              GameonHaptics.tap();
+                              setState(() => _segment = index);
+                            },
                           ),
                         );
                       }),
                     ),
                   ),
                   const SizedBox(height: 24),
-                  _buildContent(selected, filteredDeals),
+                  GameonAnimatedIn(
+                    key: ValueKey('$selected-$_segment'),
+                    child: _buildContent(selected, filteredDeals),
+                  ),
                 ],
               ),
             );
@@ -127,47 +146,54 @@ class _CatalogScreenState extends State<CatalogScreen> {
 
   Widget _buildContent(String? platform, List<GameSummary> deals) {
     if (platform == null) {
-      return const _SourceState(text: 'یک پلتفرم انتخاب کن.');
+      return const GameonEmptyState(icon: Icons.touch_app_rounded, title: 'پلتفرم را انتخاب کن', message: 'یکی از پلتفرم‌ها را برای دیدن کاتالوگ انتخاب کن.');
     }
 
     if (platform == 'pc' && (_segment == 0 || _segment == 3)) {
       if (deals.isEmpty) {
-        return _SourceState(
-          text: _segment == 0
-              ? 'در پاسخ فعلی CheapShark بازی رایگان قابل نمایش پیدا نشد.'
-              : 'در پاسخ فعلی CheapShark تخفیف قابل نمایش پیدا نشد.',
+        return GameonEmptyState(
+          icon: _segment == 0 ? Icons.bolt_rounded : Icons.local_offer_outlined,
+          title: _segment == 0 ? 'بازی رایگانی پیدا نشد' : 'تخفیفی پیدا نشد',
+          message: 'در پاسخ فعلی منبع واقعی، مورد قابل نمایشی وجود ندارد.',
         );
       }
       return Column(
-        children: deals.map((game) => Padding(
-          padding: const EdgeInsets.only(bottom: 10),
-          child: _GameTile(game: game),
-        )).toList(),
+        children: deals.asMap().entries.map((entry) => Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: GameonAnimatedIn(
+                delay: Duration(milliseconds: 30 * entry.key.clamp(0, 8)),
+                child: _GameTile(game: entry.value),
+              ),
+            )).toList(),
       );
     }
 
     final sourceText = switch (platform) {
       'playstation' => _segment == 1
-          ? 'PS Plus از منبع رسمی PlayStation نمایش داده خواهد شد.'
-          : 'کاتالوگ PlayStation فقط بعد از اتصال پایدار به منبع رسمی فروشگاه نمایش داده می‌شود.',
+          ? 'پلی‌استیشن پلاس فقط بعد از اتصال پایدار به منبع رسمی نمایش داده می‌شود.'
+          : 'کاتالوگ پلی‌استیشن فقط بعد از اتصال پایدار به منبع رسمی فروشگاه نمایش داده می‌شود.',
       'xbox' => _segment == 1
-          ? 'Game Pass از منبع رسمی Xbox با دسته‌های Recently Added، Coming و Leaving Soon نمایش داده خواهد شد.'
-          : 'کاتالوگ Xbox فقط بعد از اتصال پایدار به منبع رسمی نمایش داده می‌شود.',
+          ? 'گیم پس از منبع رسمی ایکس‌باکس با دسته‌های افزوده‌شده، در راه و خروج نزدیک نمایش داده خواهد شد.'
+          : 'کاتالوگ ایکس‌باکس فقط بعد از اتصال پایدار به منبع رسمی نمایش داده می‌شود.',
       'nintendo' => _segment == 1
-          ? 'Nintendo Switch Online، Classics و Game Trials از منبع رسمی Nintendo نمایش داده خواهند شد.'
-          : 'کاتالوگ Nintendo فقط بعد از اتصال پایدار به منبع رسمی نمایش داده می‌شود.',
+          ? 'Nintendo Switch Online، Classics و Game Trials از منبع رسمی نینتندو نمایش داده خواهند شد.'
+          : 'کاتالوگ نینتندو فقط بعد از اتصال پایدار به منبع رسمی نمایش داده می‌شود.',
       'pc' => 'این دسته هنوز منبع عمومی واقعی متصل ندارد.',
       _ => 'برای این بخش هنوز منبع معتبر متصل نشده است.',
     };
 
-    return _SourceState(text: sourceText);
+    return GameonEmptyState(
+      icon: Icons.verified_outlined,
+      title: 'منتظر منبع معتبر',
+      message: sourceText,
+    );
   }
 
   String _platformLabel(String value) => switch (value) {
-    'playstation' => 'PlayStation',
-    'xbox' => 'Xbox',
-    'pc' => 'PC',
-    'nintendo' => 'Nintendo',
+    'playstation' => 'پلی‌استیشن',
+    'xbox' => 'ایکس‌باکس',
+    'pc' => 'رایانه',
+    'nintendo' => 'نینتندو',
     _ => value,
   };
 }
@@ -184,66 +210,29 @@ class _GameTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      borderRadius: BorderRadius.circular(20),
-      onTap: () => Navigator.of(context).push(
-        MaterialPageRoute<void>(builder: (_) => GameDetailScreen(game: game)),
-      ),
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: GameonColors.surface,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: GameonColors.border),
-        ),
-        child: Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(game.title, textDirection: TextDirection.ltr, style: const TextStyle(fontWeight: FontWeight.w800)),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      if (game.discountPercent != null && game.discountPercent! > 0)
-                        Text('-${game.discountPercent}%', style: const TextStyle(color: Color(0xFF56E06E), fontWeight: FontWeight.w900)),
-                      if (game.discountPercent != null && game.discountPercent! > 0) const SizedBox(width: 10),
-                      if (game.salePrice != null)
-                        Text(game.salePrice == 0 ? 'رایگان' : '\$${game.salePrice!.toStringAsFixed(2)}', textDirection: TextDirection.ltr),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            const Icon(Icons.arrow_back_ios_new_rounded, size: 16, color: GameonColors.textSecondary),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _SourceState extends StatelessWidget {
-  const _SourceState({required this.text});
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: GameonColors.surface,
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: GameonColors.border),
-      ),
+    return GameonSurface(
+      onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => GameDetailScreen(game: game))),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(Icons.verified_outlined, color: GameonColors.accentCyan),
-          const SizedBox(width: 12),
-          Expanded(child: Text(text, style: const TextStyle(color: GameonColors.textSecondary, height: 1.7))),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(game.title, textDirection: TextDirection.ltr, style: const TextStyle(fontWeight: FontWeight.w800)),
+                const SizedBox(height: 9),
+                Row(
+                  children: [
+                    if (game.discountPercent != null && game.discountPercent! > 0)
+                      Text('-${game.discountPercent}٪', style: const TextStyle(color: Color(0xFF56E06E), fontWeight: FontWeight.w900)),
+                    if (game.discountPercent != null && game.discountPercent! > 0) const SizedBox(width: 10),
+                    if (game.salePrice != null)
+                      Text(game.salePrice == 0 ? 'رایگان' : '\$${game.salePrice!.toStringAsFixed(2)}', textDirection: TextDirection.ltr),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const Icon(Icons.arrow_back_ios_new_rounded, size: 16, color: GameonColors.textSecondary),
         ],
       ),
     );
