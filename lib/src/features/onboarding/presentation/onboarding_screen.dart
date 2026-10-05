@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:gameon/src/features/shell/presentation/app_shell.dart';
-import 'package:gameon/src/theme/gameon_theme.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 enum GamingPlatform { playstation, xbox, pc, nintendo }
