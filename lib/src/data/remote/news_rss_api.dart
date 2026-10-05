@@ -71,7 +71,6 @@ class NewsRssApi {
     final summaryRaw = _text(node, 'description');
     final guid = _text(node, 'guid');
     final pubDate = _text(node, 'pubDate');
-    final image = _extractImage(node, summaryRaw);
 
     return NewsItem(
       id: guid.isNotEmpty ? guid : link,
@@ -80,7 +79,7 @@ class NewsRssApi {
       source: source.name,
       sourceType: source.type,
       summary: _cleanSummary(summaryRaw),
-      imageUrl: image,
+      imageUrl: _extractImage(node, summaryRaw),
       publishedAt: _parseDate(pubDate),
     );
   }
@@ -115,7 +114,7 @@ class NewsRssApi {
         if (url != null && url.startsWith('http')) return url;
       }
     }
-    final match = RegExp(r'<img[^>]+src=["\']([^"\']+)["\']', caseSensitive: false).firstMatch(html);
+    final match = RegExp(r"<img[^>]+src=['\"]([^'\"]+)['\"]", caseSensitive: false).firstMatch(html);
     return match?.group(1);
   }
 
