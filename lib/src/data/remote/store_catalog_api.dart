@@ -92,7 +92,7 @@ class StoreCatalogApi {
       return _filter(cachedFull.games, normalized);
     }
 
-    final first = normalized.characters.first;
+    final first = normalized.substring(0, 1);
     final letter = RegExp(r'^[a-z]$').hasMatch(first) ? first : '_';
     final cacheKey = '$platform:$letter';
     var candidates = _searchCache[cacheKey];
