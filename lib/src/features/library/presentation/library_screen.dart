@@ -2,6 +2,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:gameon/src/data/local/game_library_store.dart';
 import 'package:gameon/src/data/models/game_summary.dart';
+import 'package:gameon/src/features/following/presentation/following_center_screen.dart';
 import 'package:gameon/src/features/game/presentation/game_detail_screen.dart';
 import 'package:gameon/src/theme/gameon_theme.dart';
 
@@ -27,7 +28,21 @@ class _LibraryScreenState extends State<LibraryScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('کتابخانه من')),
+      appBar: AppBar(
+        title: const Text('کتابخانه من'),
+        actions: [
+          IconButton(
+            tooltip: 'دنبال‌شده‌ها',
+            onPressed: () async {
+              await Navigator.of(context).push(
+                MaterialPageRoute<void>(builder: (_) => const FollowingCenterScreen()),
+              );
+              _refresh();
+            },
+            icon: const Icon(Icons.notifications_active_outlined),
+          ),
+        ],
+      ),
       body: FutureBuilder<(List<GameSummary>, List<GameSummary>)>(
         future: _future,
         builder: (context, snapshot) {
