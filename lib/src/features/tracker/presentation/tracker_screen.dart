@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:gameon/src/data/remote/tracker_network_api.dart';
 import 'package:gameon/src/theme/gameon_theme.dart';
+import 'package:gameon/src/ui/gameon_ux.dart';
 
 class TrackerScreen extends StatefulWidget {
   const TrackerScreen({super.key});
@@ -25,7 +26,8 @@ class _TrackerScreenState extends State<TrackerScreen> {
 
   Future<void> _lookup() async {
     final id = _player.text.trim();
-    if (id.isEmpty) return;
+    if (id.isEmpty || _loading) return;
+    GameonHaptics.tap();
     setState(() {
       _loading = true;
       _message = null;
@@ -33,9 +35,12 @@ class _TrackerScreenState extends State<TrackerScreen> {
     });
     try {
       final stats = await _api.fetchApexProfile(platform: _platform, playerId: id);
-      if (mounted) setState(() => _stats = stats);
+      if (mounted) {
+        setState(() => _stats = stats);
+        GameonHaptics.confirm();
+      }
     } on TrackerConfigurationException {
-      if (mounted) setState(() => _message = 'کلید Tracker Network هنوز برای این Build تنظیم نشده است.');
+      if (mounted) setState(() => _message = 'کلید Tracker Network هنوز برای این نسخه تنظیم نشده است.');
     } on TrackerDataException catch (e) {
       if (mounted) setState(() => _message = e.message);
     } catch (_) {
@@ -48,53 +53,99 @@ class _TrackerScreenState extends State<TrackerScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Tracker')),
+      appBar: AppBar(title: const Text('رتبه و آمار')),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 10, 16, 28),
         children: [
-          Text('Apex Legends', textDirection: TextDirection.ltr, style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900)),
-          const SizedBox(height: 6),
-          const Text('اولین Provider واقعی Gameon • بدون آمار دمو', style: TextStyle(color: GameonColors.textSecondary)),
-          const SizedBox(height: 22),
-          SegmentedButton<String>(
-            segments: const [
-              ButtonSegment(value: 'psn', label: Text('PSN')),
-              ButtonSegment(value: 'xbl', label: Text('Xbox')),
-              ButtonSegment(value: 'origin', label: Text('PC')),
-            ],
-            selected: {_platform},
-            onSelectionChanged: (value) => setState(() => _platform = value.first),
+          GameonAnimatedIn(
+            child: GameonSurface(
+              highlight: true,
+              child: Row(
+                children: [
+                  Container(
+                    width: 54,
+                    height: 54,
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.primary.withValues(alpha: .12),
+                      borderRadius: BorderRadius.circular(18),
+                    ),
+                    child: Icon(Icons.leaderboard_rounded, color: Theme.of(context).colorScheme.primary),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Apex Legends', textDirection: TextDirection.ltr, style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900)),
+                        const SizedBox(height: 5),
+                        const Text('ارائه‌دهنده واقعی • بدون آمار ساختگی', style: TextStyle(color: GameonColors.textSecondary, fontSize: 12.5)),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 18),
+          GameonAnimatedIn(
+            delay: const Duration(milliseconds: 70),
+            child: SegmentedButton<String>(
+              segments: const [
+                ButtonSegment(value: 'psn', label: Text('PSN')),
+                ButtonSegment(value: 'xbl', label: Text('ایکس‌باکس')),
+                ButtonSegment(value: 'origin', label: Text('رایانه')),
+              ],
+              selected: {_platform},
+              onSelectionChanged: (value) {
+                GameonHaptics.tap();
+                setState(() => _platform = value.first);
+              },
+            ),
           ),
           const SizedBox(height: 14),
-          TextField(
-            controller: _player,
-            textDirection: TextDirection.ltr,
-            textInputAction: TextInputAction.search,
-            onSubmitted: (_) => _lookup(),
-            decoration: const InputDecoration(
-              labelText: 'Player ID',
-              hintText: 'PSN ID / Gamertag / Origin ID',
-              prefixIcon: Icon(Icons.person_search_rounded),
+          GameonAnimatedIn(
+            delay: const Duration(milliseconds: 110),
+            child: TextField(
+              controller: _player,
+              textDirection: TextDirection.ltr,
+              textInputAction: TextInputAction.search,
+              onSubmitted: (_) => _lookup(),
+              decoration: const InputDecoration(
+                labelText: 'شناسه بازیکن',
+                hintText: 'PSN ID / Gamertag / Origin ID',
+                prefixIcon: Icon(Icons.person_search_rounded),
+              ),
             ),
           ),
           const SizedBox(height: 14),
           FilledButton.icon(
             onPressed: _loading ? null : _lookup,
-            icon: _loading
-                ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                : const Icon(Icons.analytics_rounded),
-            label: const Text('نمایش آمار واقعی'),
+            icon: const Icon(Icons.analytics_rounded),
+            label: Text(_loading ? 'در حال دریافت…' : 'نمایش آمار واقعی'),
           ),
-          if (_message != null) ...[
-            const SizedBox(height: 18),
-            _Info(text: _message!),
+          if (_loading) ...[
+            const SizedBox(height: 20),
+            const GameonSkeleton(width: double.infinity, height: 180, radius: 24),
           ],
-          if (_stats != null) ...[
+          if (_message != null && !_loading) ...[
+            const SizedBox(height: 18),
+            GameonEmptyState(
+              icon: Icons.info_outline_rounded,
+              title: 'آمار در دسترس نیست',
+              message: _message!,
+            ),
+          ],
+          if (_stats != null && !_loading) ...[
             const SizedBox(height: 24),
-            _StatsCard(stats: _stats!),
+            GameonAnimatedIn(child: _StatsCard(stats: _stats!)),
           ],
           const SizedBox(height: 22),
-          const _Info(text: 'بازی‌های بیشتری فقط وقتی اضافه می‌شوند که API قانونی و قابل‌اتکا داشته باشند. برای بازی فاقد API، Gameon عدد تخمینی یا ساختگی تولید نمی‌کند.'),
+          const GameonSurface(
+            child: Text(
+              'بازی‌های بیشتری فقط وقتی اضافه می‌شوند که API قانونی و قابل‌اتکا داشته باشند. برای بازی فاقد API، Gameon عدد تخمینی یا ساختگی تولید نمی‌کند.',
+              style: TextStyle(color: GameonColors.textSecondary, height: 1.7),
+            ),
+          ),
         ],
       ),
     );
@@ -108,19 +159,14 @@ class _StatsCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final rows = <(String, String?)>[
-      ('Level', stats.level),
-      ('Rank Score', stats.rankScore),
-      ('Kills', stats.kills),
-      ('Damage', stats.damage),
-      ('Wins', stats.wins),
+      ('سطح', stats.level),
+      ('امتیاز رتبه', stats.rankScore),
+      ('حذف‌ها', stats.kills),
+      ('آسیب', stats.damage),
+      ('بردها', stats.wins),
     ].where((item) => item.$2 != null).toList();
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: GameonColors.surface,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: GameonColors.border),
-      ),
+    return GameonSurface(
+      highlight: true,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -130,26 +176,15 @@ class _StatsCard extends StatelessWidget {
             const Text('پروفایل دریافت شد ولی متریک قابل نمایش در پاسخ موجود نبود.', style: TextStyle(color: GameonColors.textSecondary))
           else
             ...rows.map((row) => Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  padding: const EdgeInsets.symmetric(vertical: 9),
                   child: Row(children: [
-                    Text(row.$1, textDirection: TextDirection.ltr, style: const TextStyle(color: GameonColors.textSecondary)),
+                    Text(row.$1, style: const TextStyle(color: GameonColors.textSecondary)),
                     const Spacer(),
-                    Text(row.$2!, textDirection: TextDirection.ltr, style: const TextStyle(fontWeight: FontWeight.w900)),
+                    Text(row.$2!, textDirection: TextDirection.ltr, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
                   ]),
                 )),
         ],
       ),
     );
   }
-}
-
-class _Info extends StatelessWidget {
-  const _Info({required this.text});
-  final String text;
-  @override
-  Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.all(18),
-        decoration: BoxDecoration(color: GameonColors.surface, borderRadius: BorderRadius.circular(20), border: Border.all(color: GameonColors.border)),
-        child: Text(text, style: const TextStyle(color: GameonColors.textSecondary, height: 1.7)),
-      );
 }
