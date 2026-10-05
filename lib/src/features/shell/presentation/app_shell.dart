@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:gameon/src/features/home/presentation/home_screen.dart';
 import 'package:gameon/src/features/library/presentation/library_screen.dart';
+import 'package:gameon/src/features/profile/presentation/profile_screen.dart';
 import 'package:gameon/src/features/search/presentation/game_search_screen.dart';
 import 'package:gameon/src/theme/gameon_theme.dart';
 
@@ -19,7 +20,7 @@ class _AppShellState extends State<AppShell> {
     GameSearchScreen(),
     LibraryScreen(),
     _PendingFeature(title: 'Tracker', text: 'Tracker فقط برای بازی‌هایی فعال می‌شود که API واقعی و مجاز برای آمار بازیکن داشته باشند.'),
-    _PendingFeature(title: 'پروفایل', text: 'اطلاعات پلتفرم‌ها، سرویس‌ها و شناسه‌های ذخیره‌شده اینجا نمایش داده خواهند شد.'),
+    ProfileScreen(),
   ];
 
   @override
