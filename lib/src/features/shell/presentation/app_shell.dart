@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:gameon/src/features/catalog/presentation/catalog_screen.dart';
 import 'package:gameon/src/features/home/presentation/home_screen.dart';
 import 'package:gameon/src/features/library/presentation/library_screen.dart';
 import 'package:gameon/src/features/profile/presentation/profile_screen.dart';
 import 'package:gameon/src/features/search/presentation/game_search_screen.dart';
-import 'package:gameon/src/features/tracker/presentation/tracker_screen.dart';
 import 'package:gameon/src/ui/gameon_ux.dart';
 
 class AppShell extends StatefulWidget {
@@ -18,21 +18,16 @@ class _AppShellState extends State<AppShell> {
 
   static const _pages = <Widget>[
     HomeScreen(),
+    CatalogScreen(),
     GameSearchScreen(),
     LibraryScreen(),
-    TrackerScreen(),
     ProfileScreen(),
   ];
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 260),
-        switchInCurve: Curves.easeOutCubic,
-        switchOutCurve: Curves.easeInCubic,
-        child: KeyedSubtree(key: ValueKey(_index), child: _pages[_index]),
-      ),
+      body: IndexedStack(index: _index, children: _pages),
       bottomNavigationBar: SafeArea(
         top: false,
         child: Padding(
@@ -48,9 +43,9 @@ class _AppShellState extends State<AppShell> {
               },
               destinations: const [
                 NavigationDestination(icon: Icon(Icons.home_outlined), selectedIcon: Icon(Icons.home_rounded), label: 'خانه'),
+                NavigationDestination(icon: Icon(Icons.grid_view_outlined), selectedIcon: Icon(Icons.grid_view_rounded), label: 'کاتالوگ'),
                 NavigationDestination(icon: Icon(Icons.search_rounded), label: 'جستجو'),
                 NavigationDestination(icon: Icon(Icons.favorite_border_rounded), selectedIcon: Icon(Icons.favorite_rounded), label: 'کتابخانه'),
-                NavigationDestination(icon: Icon(Icons.leaderboard_outlined), selectedIcon: Icon(Icons.leaderboard_rounded), label: 'رتبه'),
                 NavigationDestination(icon: Icon(Icons.person_outline_rounded), selectedIcon: Icon(Icons.person_rounded), label: 'من'),
               ],
             ),
