@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:gameon/src/data/models/game_summary.dart';
 import 'package:gameon/src/data/remote/cheapshark_api.dart';
 import 'package:gameon/src/features/game/presentation/game_detail_screen.dart';
+import 'package:gameon/src/features/news/presentation/news_screen.dart';
 import 'package:gameon/src/features/search/presentation/game_search_screen.dart';
 import 'package:gameon/src/theme/gameon_theme.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -54,6 +55,12 @@ class _HomeScreenState extends State<HomeScreen> {
                     children: [
                       Text('GAMEON', textDirection: TextDirection.ltr, style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900, letterSpacing: 1.4)),
                       const Spacer(),
+                      IconButton.filledTonal(
+                        tooltip: 'اخبار',
+                        onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const NewsScreen())),
+                        icon: const Icon(Icons.newspaper_rounded),
+                      ),
+                      const SizedBox(width: 8),
                       IconButton.filledTonal(
                         onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const GameSearchScreen())),
                         icon: const Icon(Icons.search_rounded),
