@@ -34,6 +34,25 @@ class FreeToGameApi {
     return rows.whereType<Map<String, dynamic>>().map(_summaryFromJson).toList();
   }
 
+  Future<List<GameSummary>> searchGames(String query) async {
+    final normalized = query.trim().toLowerCase();
+    if (normalized.isEmpty) return const <GameSummary>[];
+    final games = await fetchGames(sortBy: 'relevance');
+    return games
+        .where((game) {
+          final title = game.title.toLowerCase();
+          final genre = (game.genre ?? '').toLowerCase();
+          final publisher = (game.publisher ?? '').toLowerCase();
+          final developer = (game.developer ?? '').toLowerCase();
+          return title.contains(normalized) ||
+              genre.contains(normalized) ||
+              publisher.contains(normalized) ||
+              developer.contains(normalized);
+        })
+        .take(40)
+        .toList();
+  }
+
   Future<GameDetails> fetchDetails(String sourceId) async {
     final response = await _dio.get<Map<String, dynamic>>(
       '/game',
