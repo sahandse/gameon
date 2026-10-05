@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:gameon/src/features/shell/presentation/app_shell.dart';
 import 'package:gameon/src/theme/gameon_theme.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -13,25 +15,15 @@ class OnboardingScreen extends StatefulWidget {
 }
 
 class _OnboardingScreenState extends State<OnboardingScreen> {
-  static const int _steps = 5;
+  static const _steps = 5;
   int _step = 0;
+  bool _saving = false;
   GameonThemeChoice _theme = GameonThemeChoice.midnight;
   final Set<GamingPlatform> _platforms = <GamingPlatform>{};
   final Set<String> _services = <String>{};
   final Map<GamingPlatform, TextEditingController> _ids = {
-    GamingPlatform.playstation: TextEditingController(),
-    GamingPlatform.xbox: TextEditingController(),
-    GamingPlatform.pc: TextEditingController(),
-    GamingPlatform.nintendo: TextEditingController(),
+    for (final platform in GamingPlatform.values) platform: TextEditingController(),
   };
-
-  @override
-  void dispose() {
-    for (final controller in _ids.values) {
-      controller.dispose();
-    }
-    super.dispose();
-  }
 
   Color get _accent => switch (_theme) {
         GameonThemeChoice.midnight => const Color(0xFF4B7BFF),
@@ -42,10 +34,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         GameonThemeChoice.light => const Color(0xFF2764E7),
       };
 
-  bool get _canContinue {
-    if (_step == 1) return _platforms.isNotEmpty;
-    return true;
-  }
+  bool get _canContinue => _step != 1 || _platforms.isNotEmpty;
 
   List<String> get _availableServices {
     final items = <String>[];
@@ -55,42 +44,58 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     if (_platforms.contains(GamingPlatform.xbox)) {
       items.addAll(const ['Game Pass Core', 'Game Pass Standard', 'Game Pass Ultimate']);
     }
-    if (_platforms.contains(GamingPlatform.pc)) {
-      items.add('PC Game Pass');
-    }
+    if (_platforms.contains(GamingPlatform.pc)) items.add('PC Game Pass');
     if (_platforms.contains(GamingPlatform.nintendo)) {
       items.addAll(const ['Nintendo Switch Online', 'Expansion Pack']);
     }
     return items;
   }
 
+  @override
+  void dispose() {
+    for (final controller in _ids.values) {
+      controller.dispose();
+    }
+    super.dispose();
+  }
+
   Future<void> _next() async {
-    if (!_canContinue) return;
+    if (!_canContinue || _saving) return;
+    HapticFeedback.selectionClick();
+
     if (_step < _steps - 1) {
       setState(() => _step++);
       return;
     }
 
+    setState(() => _saving = true);
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('onboarding_completed', true);
     await prefs.setString('theme_choice', _theme.name);
     await prefs.setStringList('platforms', _platforms.map((e) => e.name).toList());
     await prefs.setStringList('services', _services.toList());
+
     for (final entry in _ids.entries) {
       final value = entry.value.text.trim();
-      if (value.isNotEmpty) {
-        await prefs.setString('player_id_${entry.key.name}', value);
+      final key = 'player_id_${entry.key.name}';
+      if (value.isEmpty) {
+        await prefs.remove(key);
+      } else {
+        await prefs.setString(key, value);
       }
     }
 
     if (!mounted) return;
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute<void>(builder: (_) => const _OnboardingDoneScreen()),
+    HapticFeedback.mediumImpact();
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute<void>(builder: (_) => const AppShell()),
+      (_) => false,
     );
   }
 
   void _back() {
-    if (_step == 0) return;
+    if (_step == 0 || _saving) return;
+    HapticFeedback.selectionClick();
     setState(() => _step--);
   }
 
@@ -102,14 +107,11 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         child: Column(
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+              padding: const EdgeInsets.fromLTRB(20, 14, 20, 8),
               child: Row(
                 children: [
                   if (_step > 0)
-                    IconButton(
-                      onPressed: _back,
-                      icon: const Icon(Icons.arrow_forward_rounded),
-                    )
+                    IconButton(onPressed: _back, icon: const Icon(Icons.arrow_forward_rounded))
                   else
                     const SizedBox(width: 48),
                   const Spacer(),
@@ -125,7 +127,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   Text(
                     '${_step + 1}/$_steps',
                     style: theme.textTheme.labelLarge?.copyWith(
-                      color: GameonColors.textSecondary,
+                      color: theme.colorScheme.onSurfaceVariant,
                     ),
                   ),
                 ],
@@ -138,35 +140,45 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 child: LinearProgressIndicator(
                   minHeight: 4,
                   value: (_step + 1) / _steps,
-                  backgroundColor: GameonColors.surface,
+                  backgroundColor: theme.colorScheme.surfaceContainerHighest,
                   valueColor: AlwaysStoppedAnimation(_accent),
                 ),
               ),
             ),
             Expanded(
               child: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 280),
+                duration: const Duration(milliseconds: 260),
                 switchInCurve: Curves.easeOutCubic,
                 switchOutCurve: Curves.easeInCubic,
-                child: KeyedSubtree(
-                  key: ValueKey(_step),
-                  child: _buildStep(context),
+                transitionBuilder: (child, animation) => FadeTransition(
+                  opacity: animation,
+                  child: SlideTransition(
+                    position: Tween<Offset>(
+                      begin: const Offset(.04, 0),
+                      end: Offset.zero,
+                    ).animate(animation),
+                    child: child,
+                  ),
                 ),
+                child: KeyedSubtree(key: ValueKey(_step), child: _buildStep(context)),
               ),
             ),
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 8, 20, 22),
-              child: SizedBox(
-                width: double.infinity,
-                child: FilledButton(
-                  style: FilledButton.styleFrom(
-                    backgroundColor: _accent,
-                    minimumSize: const Size.fromHeight(56),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-                  ),
-                  onPressed: _canContinue ? _next : null,
-                  child: Text(_step == _steps - 1 ? 'ساخت تجربه من' : 'ادامه'),
+              child: FilledButton(
+                onPressed: _canContinue && !_saving ? _next : null,
+                style: FilledButton.styleFrom(
+                  backgroundColor: _accent,
+                  minimumSize: const Size.fromHeight(56),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
                 ),
+                child: _saving
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                      )
+                    : Text(_step == _steps - 1 ? 'ورود به Gameon' : 'ادامه'),
               ),
             ),
           ],
@@ -183,182 +195,130 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         _ => _finishStep(context),
       };
 
-  Widget _header(BuildContext context, String title, String subtitle) {
-    final theme = Theme.of(context);
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            title,
-            style: theme.textTheme.headlineMedium?.copyWith(
-              fontWeight: FontWeight.w900,
-              height: 1.25,
-            ),
-          ),
-          const SizedBox(height: 10),
-          Text(
-            subtitle,
-            style: theme.textTheme.bodyLarge?.copyWith(
-              color: GameonColors.textSecondary,
-              height: 1.65,
-            ),
-          ),
-        ],
-      ),
+  Widget _page(String title, String subtitle, List<Widget> children) {
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(20, 32, 20, 20),
+      children: [
+        Text(title, style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w900)),
+        const SizedBox(height: 10),
+        Text(
+          subtitle,
+          style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, height: 1.65),
+        ),
+        const SizedBox(height: 24),
+        ...children,
+      ],
     );
   }
 
   Widget _themeStep(BuildContext context) {
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(20, 34, 20, 20),
-      children: [
-        _header(context, 'ظاهر Gameon را خودت انتخاب کن', 'هر زمان خواستی بعداً هم می‌توانی تم را تغییر بدهی.'),
-        GridView.count(
-          crossAxisCount: 2,
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          crossAxisSpacing: 12,
-          mainAxisSpacing: 12,
-          childAspectRatio: 1.35,
-          children: GameonThemeChoice.values.map((item) {
-            final selected = item == _theme;
-            final color = _themeColor(item);
-            return InkWell(
-              borderRadius: BorderRadius.circular(22),
-              onTap: () => setState(() => _theme = item),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 220),
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: selected ? color.withValues(alpha: .14) : GameonColors.surface,
-                  borderRadius: BorderRadius.circular(22),
-                  border: Border.all(color: selected ? color : GameonColors.border, width: selected ? 1.5 : 1),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Container(
-                      width: 36,
-                      height: 36,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        gradient: LinearGradient(colors: [color, color.withValues(alpha: .45)]),
-                        boxShadow: [BoxShadow(color: color.withValues(alpha: .25), blurRadius: 16)],
-                      ),
-                    ),
-                    Text(_themeLabel(item), style: const TextStyle(fontWeight: FontWeight.w800)),
-                  ],
-                ),
-              ),
-            );
-          }).toList(),
-        ),
-      ],
-    );
+    return _page('ظاهر Gameon را انتخاب کن', 'تمی را انتخاب کن که بازی‌کردن با آن حس بهتری بهت می‌دهد.', [
+      GridView.count(
+        crossAxisCount: 2,
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        crossAxisSpacing: 12,
+        mainAxisSpacing: 12,
+        childAspectRatio: 1.35,
+        children: GameonThemeChoice.values.map((item) {
+          final selected = item == _theme;
+          final color = _themeColor(item);
+          return _SelectCard(
+            title: _themeLabel(item),
+            selected: selected,
+            accent: color,
+            icon: Icons.palette_rounded,
+            onTap: () {
+              HapticFeedback.selectionClick();
+              setState(() => _theme = item);
+            },
+          );
+        }).toList(),
+      ),
+    ]);
   }
 
   Widget _platformStep(BuildContext context) {
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(20, 34, 20, 20),
-      children: [
-        _header(context, 'کجا بازی می‌کنی؟', 'می‌توانی چند پلتفرم انتخاب کنی. محتوای برنامه فقط براساس انتخاب‌های خودت ساخته می‌شود.'),
-        ...GamingPlatform.values.map((platform) {
-          final selected = _platforms.contains(platform);
-          return Padding(
-            padding: const EdgeInsets.only(bottom: 12),
-            child: _ChoiceTile(
-              title: _platformLabel(platform),
-              subtitle: _platformSubtitle(platform),
-              selected: selected,
-              accent: _accent,
-              icon: _platformIcon(platform),
-              onTap: () {
-                setState(() {
-                  selected ? _platforms.remove(platform) : _platforms.add(platform);
-                  _services.removeWhere((service) => !_availableServices.contains(service));
-                });
-              },
-            ),
-          );
-        }),
-      ],
-    );
+    return _page('کجا بازی می‌کنی؟', 'یک یا چند پلتفرم انتخاب کن تا محتوای صفحه اصلی برای خودت مرتب شود.', [
+      ...GamingPlatform.values.map((platform) {
+        final selected = _platforms.contains(platform);
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: _SelectCard(
+            title: _platformLabel(platform),
+            subtitle: _platformSubtitle(platform),
+            selected: selected,
+            accent: _accent,
+            icon: _platformIcon(platform),
+            onTap: () {
+              HapticFeedback.selectionClick();
+              setState(() {
+                selected ? _platforms.remove(platform) : _platforms.add(platform);
+                _services.removeWhere((service) => !_availableServices.contains(service));
+              });
+            },
+          ),
+        );
+      }),
+    ]);
   }
 
   Widget _serviceStep(BuildContext context) {
     final services = _availableServices;
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(20, 34, 20, 20),
-      children: [
-        _header(context, 'کدام سرویس‌ها را داری؟', 'این مرحله اختیاری است. فقط سرویس‌های مربوط به پلتفرم‌هایی که انتخاب کردی نمایش داده می‌شوند.'),
-        if (services.isEmpty)
-          const _EmptyCard(text: 'برای پلتفرم انتخاب‌شده سرویس اشتراکی جداگانه‌ای تنظیم نشده است.')
-        else
-          ...services.map((service) => Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: _ChoiceTile(
-                  title: service,
-                  subtitle: 'برای نمایش بازی‌ها و پیشنهادهای مرتبط',
-                  selected: _services.contains(service),
-                  accent: _accent,
-                  icon: Icons.workspace_premium_rounded,
-                  onTap: () => setState(() {
-                    _services.contains(service) ? _services.remove(service) : _services.add(service);
-                  }),
-                ),
-              )),
-      ],
-    );
+    return _page('سرویس‌های بازی', 'این مرحله اختیاری است و برای شخصی‌سازی Game Pass، PS Plus و Nintendo Switch Online استفاده می‌شود.', [
+      if (services.isEmpty)
+        const _InfoCard('برای پلتفرم‌های انتخاب‌شده سرویس جداگانه‌ای وجود ندارد.')
+      else
+        ...services.map((service) {
+          final selected = _services.contains(service);
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: _SelectCard(
+              title: service,
+              selected: selected,
+              accent: _accent,
+              icon: Icons.workspace_premium_rounded,
+              onTap: () {
+                HapticFeedback.selectionClick();
+                setState(() => selected ? _services.remove(service) : _services.add(service));
+              },
+            ),
+          );
+        }),
+    ]);
   }
 
   Widget _playerIdStep(BuildContext context) {
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(20, 34, 20, 20),
-      children: [
-        _header(context, 'شناسه بازیکن تو', 'اختیاری است. Gameon بعداً فقط برای بازی‌ها و سرویس‌هایی که API واقعی دارند از این شناسه استفاده می‌کند.'),
-        ..._platforms.map((platform) => Padding(
-              padding: const EdgeInsets.only(bottom: 14),
-              child: TextField(
-                controller: _ids[platform],
-                textDirection: TextDirection.ltr,
-                decoration: InputDecoration(
-                  labelText: _idLabel(platform),
-                  hintText: _idHint(platform),
-                  prefixIcon: Icon(_platformIcon(platform)),
-                  helperText: 'این مقدار فقط روی دستگاه ذخیره می‌شود.',
-                ),
+    return _page('شناسه بازیکن', 'اختیاری است. فقط برای Providerهایی استفاده می‌شود که API واقعی و مجاز دارند.', [
+      ..._platforms.map((platform) => Padding(
+            padding: const EdgeInsets.only(bottom: 14),
+            child: TextField(
+              controller: _ids[platform],
+              textDirection: TextDirection.ltr,
+              decoration: InputDecoration(
+                labelText: _idLabel(platform),
+                hintText: _idHint(platform),
+                prefixIcon: Icon(_platformIcon(platform)),
               ),
-            )),
-        const SizedBox(height: 8),
-        const _EmptyCard(
-          text: 'فهرست بازی‌ها در این مرحله عمداً دمو نیست. بعد از اتصال دیتابیس واقعی، جستجو و انتخاب بازی‌ها همین‌جا فعال می‌شود.',
-        ),
-      ],
-    );
+            ),
+          )),
+      const _InfoCard('اگر شناسه‌ای وارد نکنی، بعداً هم می‌توانی از بخش Tracker جستجو کنی.'),
+    ]);
   }
 
   Widget _finishStep(BuildContext context) {
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(20, 34, 20, 20),
-      children: [
-        _header(context, 'همه‌چیز آماده است', 'از این انتخاب‌ها برای ساخت Home، سرویس‌ها، بازی‌های رایگان، تخفیف‌ها، اخبار و Tracker شخصی استفاده می‌کنیم.'),
-        _SummaryCard(
-          accent: _accent,
-          rows: [
-            ('تم', _themeLabel(_theme)),
-            ('پلتفرم‌ها', _platforms.map(_platformLabel).join(' • ')),
-            ('سرویس‌ها', _services.isEmpty ? 'انتخاب نشده' : _services.join(' • ')),
-          ],
-        ),
-        const SizedBox(height: 14),
-        const _EmptyCard(
-          text: 'هیچ بازی، قیمت، رتبه یا خبر ساختگی به حساب تو اضافه نمی‌شود. فقط دیتای تأییدشده از منابع واقعی نمایش داده خواهد شد.',
-        ),
-      ],
-    );
+    return _page('آماده‌ای 🎮', 'بعد از این صفحه مستقیم وارد برنامه اصلی می‌شوی.', [
+      _SummaryCard(
+        accent: _accent,
+        rows: [
+          ('تم', _themeLabel(_theme)),
+          ('پلتفرم‌ها', _platforms.map(_platformLabel).join(' • ')),
+          ('سرویس‌ها', _services.isEmpty ? 'انتخاب نشده' : _services.join(' • ')),
+        ],
+      ),
+      const SizedBox(height: 14),
+      const _InfoCard('هیچ بازی، قیمت، خبر یا رتبه ساختگی نمایش داده نمی‌شود؛ فقط داده واقعی و قابل‌تأیید.'),
+    ]);
   }
 
   Color _themeColor(GameonThemeChoice value) => switch (value) {
@@ -408,25 +368,25 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       };
 
   String _idHint(GamingPlatform value) => switch (value) {
-        GamingPlatform.playstation => 'مثال: YourPSNName',
-        GamingPlatform.xbox => 'مثال: YourGamertag',
+        GamingPlatform.playstation => 'YourPSNName',
+        GamingPlatform.xbox => 'YourGamertag',
         GamingPlatform.pc => 'Steam ID یا لینک پروفایل',
         GamingPlatform.nintendo => 'نام نمایشی حساب',
       };
 }
 
-class _ChoiceTile extends StatelessWidget {
-  const _ChoiceTile({
+class _SelectCard extends StatelessWidget {
+  const _SelectCard({
     required this.title,
-    required this.subtitle,
     required this.selected,
     required this.accent,
     required this.icon,
     required this.onTap,
+    this.subtitle,
   });
 
   final String title;
-  final String subtitle;
+  final String? subtitle;
   final bool selected;
   final Color accent;
   final IconData icon;
@@ -434,16 +394,17 @@ class _ChoiceTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(22),
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 220),
-        padding: const EdgeInsets.all(17),
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: selected ? accent.withValues(alpha: .11) : GameonColors.surface,
+          color: selected ? accent.withValues(alpha: .12) : scheme.surfaceContainer,
           borderRadius: BorderRadius.circular(22),
-          border: Border.all(color: selected ? accent : GameonColors.border, width: selected ? 1.4 : 1),
+          border: Border.all(color: selected ? accent : scheme.outlineVariant),
         ),
         child: Row(
           children: [
@@ -451,32 +412,29 @@ class _ChoiceTile extends StatelessWidget {
               width: 46,
               height: 46,
               decoration: BoxDecoration(
-                color: selected ? accent.withValues(alpha: .16) : GameonColors.background,
+                color: selected ? accent.withValues(alpha: .15) : scheme.surfaceContainerHighest,
                 borderRadius: BorderRadius.circular(15),
               ),
-              child: Icon(icon, color: selected ? accent : GameonColors.textSecondary),
+              child: Icon(icon, color: selected ? accent : scheme.onSurfaceVariant),
             ),
             const SizedBox(width: 14),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(title, textDirection: TextDirection.ltr, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
-                  const SizedBox(height: 4),
-                  Text(subtitle, style: const TextStyle(color: GameonColors.textSecondary, fontSize: 12.5)),
+                  Text(title, textDirection: TextDirection.ltr, style: const TextStyle(fontWeight: FontWeight.w800)),
+                  if (subtitle != null) ...[
+                    const SizedBox(height: 4),
+                    Text(subtitle!, style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 12.5)),
+                  ],
                 ],
               ),
             ),
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              width: 26,
-              height: 26,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: selected ? accent : Colors.transparent,
-                border: Border.all(color: selected ? accent : GameonColors.border),
-              ),
-              child: selected ? const Icon(Icons.check_rounded, size: 17, color: Colors.white) : null,
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 160),
+              child: selected
+                  ? Icon(Icons.check_circle_rounded, key: const ValueKey(true), color: accent)
+                  : Icon(Icons.circle_outlined, key: const ValueKey(false), color: scheme.outline),
             ),
           ],
         ),
@@ -492,90 +450,54 @@ class _SummaryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: GameonColors.surface,
+        color: scheme.surfaceContainer,
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: GameonColors.border),
+        border: Border.all(color: scheme.outlineVariant),
       ),
       child: Column(
-        children: rows.map((row) => Padding(
-          padding: const EdgeInsets.symmetric(vertical: 9),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(row.$1, style: TextStyle(color: accent, fontWeight: FontWeight.w800)),
-              const SizedBox(width: 12),
-              Expanded(child: Text(row.$2, textAlign: TextAlign.end)),
-            ],
-          ),
-        )).toList(),
+        children: rows
+            .map((row) => Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 9),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(row.$1, style: TextStyle(color: accent, fontWeight: FontWeight.w800)),
+                      const SizedBox(width: 12),
+                      Expanded(child: Text(row.$2, textAlign: TextAlign.end)),
+                    ],
+                  ),
+                ))
+            .toList(),
       ),
     );
   }
 }
 
-class _EmptyCard extends StatelessWidget {
-  const _EmptyCard({required this.text});
+class _InfoCard extends StatelessWidget {
+  const _InfoCard(this.text);
   final String text;
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: GameonColors.surface,
+        color: scheme.surfaceContainer,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: GameonColors.border),
+        border: Border.all(color: scheme.outlineVariant),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(Icons.verified_rounded, size: 20, color: GameonColors.accentCyan),
+          Icon(Icons.verified_rounded, size: 20, color: scheme.primary),
           const SizedBox(width: 12),
-          Expanded(child: Text(text, style: const TextStyle(color: GameonColors.textSecondary, height: 1.6))),
+          Expanded(child: Text(text, style: TextStyle(color: scheme.onSurfaceVariant, height: 1.6))),
         ],
-      ),
-    );
-  }
-}
-
-class _OnboardingDoneScreen extends StatelessWidget {
-  const _OnboardingDoneScreen();
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: SafeArea(
-        child: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(28),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 76,
-                  height: 76,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    gradient: const LinearGradient(colors: [GameonColors.accentBlue, GameonColors.accentCyan]),
-                    boxShadow: [BoxShadow(color: GameonColors.accentBlue.withValues(alpha: .25), blurRadius: 28)],
-                  ),
-                  child: const Icon(Icons.check_rounded, color: Colors.white, size: 38),
-                ),
-                const SizedBox(height: 24),
-                Text('Gameon برای تو آماده شد', style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900)),
-                const SizedBox(height: 12),
-                const Text(
-                  'مرحله بعد اتصال دیتابیس واقعی بازی‌هاست. تا آن زمان هیچ محتوای دمو نمایش داده نمی‌شود.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: GameonColors.textSecondary, height: 1.7),
-                ),
-              ],
-            ),
-          ),
-        ),
       ),
     );
   }
