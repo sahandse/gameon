@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:gameon/src/data/models/game_summary.dart';
 import 'package:gameon/src/data/remote/cheapshark_api.dart';
+import 'package:gameon/src/features/catalog/presentation/catalog_screen.dart';
 import 'package:gameon/src/features/game/presentation/game_detail_screen.dart';
 import 'package:gameon/src/features/news/presentation/news_screen.dart';
 import 'package:gameon/src/features/search/presentation/game_search_screen.dart';
@@ -56,12 +57,19 @@ class _HomeScreenState extends State<HomeScreen> {
                       Text('GAMEON', textDirection: TextDirection.ltr, style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900, letterSpacing: 1.4)),
                       const Spacer(),
                       IconButton.filledTonal(
+                        tooltip: 'کاتالوگ',
+                        onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const CatalogScreen())),
+                        icon: const Icon(Icons.grid_view_rounded),
+                      ),
+                      const SizedBox(width: 8),
+                      IconButton.filledTonal(
                         tooltip: 'اخبار',
                         onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const NewsScreen())),
                         icon: const Icon(Icons.newspaper_rounded),
                       ),
                       const SizedBox(width: 8),
                       IconButton.filledTonal(
+                        tooltip: 'جستجو',
                         onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const GameSearchScreen())),
                         icon: const Icon(Icons.search_rounded),
                       ),
@@ -73,6 +81,49 @@ class _HomeScreenState extends State<HomeScreen> {
                   Text(
                     data.platforms.isEmpty ? 'پلتفرمی انتخاب نشده است.' : data.platforms.join(' • '),
                     style: const TextStyle(color: GameonColors.textSecondary),
+                  ),
+                  const SizedBox(height: 18),
+                  InkWell(
+                    borderRadius: BorderRadius.circular(22),
+                    onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const CatalogScreen())),
+                    child: Container(
+                      padding: const EdgeInsets.all(18),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [
+                            Theme.of(context).colorScheme.primary.withValues(alpha: .18),
+                            GameonColors.surface,
+                          ],
+                        ),
+                        borderRadius: BorderRadius.circular(22),
+                        border: Border.all(color: Theme.of(context).colorScheme.primary.withValues(alpha: .28)),
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 48,
+                            height: 48,
+                            decoration: BoxDecoration(
+                              color: Theme.of(context).colorScheme.primary.withValues(alpha: .14),
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            child: Icon(Icons.grid_view_rounded, color: Theme.of(context).colorScheme.primary),
+                          ),
+                          const SizedBox(width: 14),
+                          const Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('کاتالوگ من', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
+                                SizedBox(height: 5),
+                                Text('رایگان، اشتراکی، پولی، تخفیف و بزودی', style: TextStyle(color: GameonColors.textSecondary, fontSize: 12.5)),
+                              ],
+                            ),
+                          ),
+                          const Icon(Icons.arrow_back_ios_new_rounded, size: 16),
+                        ],
+                      ),
+                    ),
                   ),
                   const SizedBox(height: 28),
                   _Section(title: 'تخفیف‌های واقعی PC', enabled: data.platforms.contains('pc'), deals: data.deals),
