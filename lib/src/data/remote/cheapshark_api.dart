@@ -9,7 +9,7 @@ class CheapSharkApi {
               connectTimeout: const Duration(seconds: 12),
               receiveTimeout: const Duration(seconds: 12),
               headers: const <String, String>{
-                'User-Agent': 'Gameon/0.1.0 (Flutter; sahandse/gameon)',
+                'User-Agent': 'Gameon/0.2.0 (Flutter; sahandse/gameon)',
               },
             ));
 
@@ -26,12 +26,16 @@ class CheapSharkApi {
 
     final rows = response.data ?? const <dynamic>[];
     return rows.whereType<Map<String, dynamic>>().map((json) {
+      final gameId = (json['gameID'] ?? '').toString();
       return GameSummary(
-        id: (json['gameID'] ?? '').toString(),
+        id: 'cheapshark:$gameId',
+        source: 'cheapshark',
+        sourceId: gameId,
+        steamAppId: json['steamAppID']?.toString(),
         title: (json['external'] ?? '').toString(),
         thumbUrl: json['thumb']?.toString(),
       );
-    }).where((game) => game.id.isNotEmpty && game.title.isNotEmpty).toList();
+    }).where((game) => game.sourceId?.isNotEmpty == true && game.title.isNotEmpty).toList();
   }
 
   Future<List<GameSummary>> fetchDeals({int pageSize = 30}) async {
@@ -49,15 +53,23 @@ class CheapSharkApi {
       final normalPrice = double.tryParse((json['normalPrice'] ?? '').toString());
       final salePrice = double.tryParse((json['salePrice'] ?? '').toString());
       final savings = double.tryParse((json['savings'] ?? '').toString());
+      final gameId = (json['gameID'] ?? '').toString();
+      final releaseUnix = int.tryParse((json['releaseDate'] ?? '').toString());
       return GameSummary(
-        id: (json['gameID'] ?? '').toString(),
+        id: 'cheapshark:$gameId',
+        source: 'cheapshark',
+        sourceId: gameId,
+        steamAppId: json['steamAppID']?.toString(),
         title: (json['title'] ?? '').toString(),
         thumbUrl: json['thumb']?.toString(),
         normalPrice: normalPrice,
         salePrice: salePrice,
         discountPercent: savings?.round(),
         storeId: json['storeID']?.toString(),
+        releaseDate: releaseUnix == null || releaseUnix <= 0
+            ? null
+            : DateTime.fromMillisecondsSinceEpoch(releaseUnix * 1000),
       );
-    }).where((game) => game.id.isNotEmpty && game.title.isNotEmpty).toList();
+    }).where((game) => game.sourceId?.isNotEmpty == true && game.title.isNotEmpty).toList();
   }
 }
